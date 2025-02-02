@@ -1,4 +1,3 @@
-import StudentPages from "./StudentPages.css"
 const StudentHomePage = ()=>{
 
     const surveyID=0;
