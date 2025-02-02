@@ -1,23 +1,39 @@
 import { useState } from "react";
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const LoginPage = () => {
-  const [ usernameHolder, setUsernameHolder ] = useState("")
+  const [ emailHolder, setEmailHolder ] = useState("")
   const [ passwordHolder, setPasswordHolder ] = useState("")
+  const [error, setError] = useState('');
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    try {
+      await login(emailHolder, passwordHolder);
+      navigate('/StudentHomePage');
+    } catch (error) {
+      setError('Failed to login');
+    }
+  }
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <form className="bg-white p-6 rounded-lg shadow-md w-80">
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md w-80">
         <h2 className="text-2xl font-semibold text-center mb-4">Login</h2>
         <div className="mb-4">
+
           {/*this block is the username block*/}
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
             Username
           </label>
           <input
-            type="text"
-            id="username"
+            type="email"
+            id="email"
             className="mt-1 p-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter your username"
-            onChange={(e)=>{setUsernameHolder(e.target.value)}} 
+            placeholder="Enter your email"
+            onChange={(e)=>{setEmailHolder(e.target.value)}} 
             // we used onChange to update the input consntaly
            
           />

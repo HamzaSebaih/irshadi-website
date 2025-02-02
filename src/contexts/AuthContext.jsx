@@ -7,11 +7,11 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 
-const AuthContext = createContext();
+const AuthContext = createContext(); //Any component inside the AuthProvider will have access to this context.
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => useContext(AuthContext); //this to make it easier to use the context 
 
-export function AuthProvider({ children }) {
+export function AuthProvider({ children }) { 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
