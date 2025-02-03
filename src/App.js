@@ -12,7 +12,7 @@ const App = () => {
   return (
     <BrowserRouter>
     <AuthProvider>
-      <Nav isAuth={isAuth} isStudent={isStudent}/>
+      <Nav/>
       <Routes>
         <Route path="/*" element={<LoginPage />} />
         <Route path="/StudentHomePage" element={
