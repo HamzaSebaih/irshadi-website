@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
-
-const Nav = ({isAuth,isStudent})=>{
+import { useAuth } from '../contexts/AuthContext';
+const Nav = ()=>{
+const { user } =  useAuth()
+const isAuth = user
+const isStudent= true;
     return(
         <nav>
         <ul>
