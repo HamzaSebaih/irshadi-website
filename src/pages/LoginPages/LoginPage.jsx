@@ -29,12 +29,11 @@ const LoginPage = () => {
   async function handleGoogleLogin() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      // Check if it's a new user
-      if (result.additionalUserInfo?.isNewUser) {
-        navigate('/complete-profile');
-      } else {
-        navigate('../StudentPages/StudentHomePage');
-      }
+     
+        navigate('/ProfileCompletionPage');
+      // } else {
+      //   navigate('/StudentHomePage');
+      // }
     } catch (error) {
       console.error("Google Login Error:", error);
       setError(`Failed to login with Google: ${error.message}`);
