@@ -22,7 +22,7 @@ const LoginPage = () => {
       await login(email, password);
       navigate('/StudentHomePage');
     } catch (error) {
-      setError('Failed to login. Please check your credentials.');
+      setError('The Email address or Passwrod is wrong');
     }
   }
 
@@ -33,10 +33,11 @@ const LoginPage = () => {
       if (result.additionalUserInfo?.isNewUser) {
         navigate('/complete-profile');
       } else {
-        navigate('/StudentHomePage');
+        navigate('../StudentPages/StudentHomePage');
       }
     } catch (error) {
-      setError('Failed to login with Google.');
+      console.error("Google Login Error:", error);
+      setError(`Failed to login with Google: ${error.message}`);
     }
   }
 
@@ -130,13 +131,14 @@ const LoginPage = () => {
               onClick={handleGoogleLogin}
               className="w-full flex items-center justify-center bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-50 transition duration-200"
             >
-              <img
-                src="/api/placeholder/20/20"
-                alt="Google logo"
-                className="w-5 h-5 mr-2"
-              />
               Login with Google
+              <img
+                src="/search.png"
+                alt="Google logo"
+                className="w-5 h-5 ml-2"
+              />
             </button>
+
 
             <div className="text-center">
               <Link to="/ForgetPassPage" className="text-blue-600 hover:text-blue-700 text-sm">
