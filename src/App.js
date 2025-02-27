@@ -8,6 +8,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './contexts/ProtectedRoute';
 
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import AvailableForms from './pages/StudnetPages/AvailableForms';
+
 const App = () => {
   const isAuth = true;
   const isStudent = true;
@@ -23,6 +25,12 @@ const App = () => {
                         <ProtectedRoute>
                         <StudentHomePage /> 
                         {/* here we are wrapping up the StudentHomePage to Protect it  */}
+                      </ProtectedRoute>
+          } />
+                  <Route path="/AvailableForms" element={
+                        <ProtectedRoute>
+                        <AvailableForms />  
+                        {/* here we are wrapping up the route to Protect it  */}
                       </ProtectedRoute>
           } /> 
         {/*<Route path="*" element={<NotFound />} /> */}
