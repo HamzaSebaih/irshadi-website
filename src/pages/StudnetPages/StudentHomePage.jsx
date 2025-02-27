@@ -1,27 +1,37 @@
-const StudentHomePage = ()=>{
+const StudentHomePage = () => {
+    const studentName = "Ali Hamza";
+    const currentProgress = "X/40 hours";
+    const lastUpdate = "2025";
 
-    const surveyID=0;
-    const date= "2024/9/11"
-    return(
-        <>
-        <div className="student-info-div">
-            <h1>Current Student Info</h1>
-            <p>Name:</p>
-            <p>Current progress:</p>
-            <p>Last updated:</p>
-            
-        </div>
-        
-        <div className="avaliable-surveys-div">
-            <h1>Avaliable Surveys</h1>
-            <div className="survey-lists">
-                <p>Survey ID: {surveyID} Due Date: {date}</p>
-                <button>fill</button>
+    return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+            <div className="bg-white shadow-lg rounded-2xl p-10 w-full max-w-7xl h-[90vh] flex flex-col justify-between">
+                <div>
+                    <h2 className="text-4xl font-bold text-gray-800 mb-10">Home Page</h2>
+
+                    <div className="space-y-8 text-xl">
+                        <h3 className="text-2xl font-semibold text-gray-700">Current Student Info:</h3>
+                        <p className="text-gray-700">
+                            <span className="font-medium text-gray-900">Name:</span> {studentName}
+                        </p>
+                        <p className="text-gray-700">
+                            <span className="font-medium text-gray-900">Current Progress:</span> {currentProgress}
+                        </p>
+                        <p className="text-gray-700">
+                            <span className="font-medium text-gray-900">Last Update of Academic Records:</span> {lastUpdate}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex justify-center mt-10">
+                    <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-8 px-28 text-xl rounded-lg transition">
+                        Import Academic Records
+                    </button>
+                </div>
+
             </div>
         </div>
-        </>
-    )
-    }
-    
-    
-    export default StudentHomePage
+    );
+};
+
+export default StudentHomePage;
