@@ -1,7 +1,11 @@
+import { useNavigate } from "react-router-dom"; // ✅ Correct import
+import StudentImportRecordPage from "./StudentImportRecordPage"; // ✅ Check if default export
+
 const StudentHomePage = () => {
     const studentName = "Ali Hamza";
     const currentProgress = "X/40 hours";
     const lastUpdate = "2025";
+    const navigate = useNavigate(); // ✅ Correct way to use navigation
 
     return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
@@ -23,12 +27,15 @@ const StudentHomePage = () => {
                     </div>
                 </div>
 
+                {/* ✅ Correct button navigation */}
                 <div className="flex justify-center mt-10">
-                    <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-8 px-28 text-xl rounded-lg transition">
+                    <button 
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-8 px-28 text-xl rounded-lg transition" 
+                        onClick={() => navigate("/StudentImportRecordPage")}
+                    >
                         Import Academic Records
                     </button>
                 </div>
-
             </div>
         </div>
     );
