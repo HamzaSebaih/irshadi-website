@@ -9,6 +9,9 @@ import ProtectedRoute from './contexts/ProtectedRoute';
 
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
+import StudentImportRecordPage from './pages/StudnetPages/StudentImportRecordPage';
+import AdminHomePage from './pages/AdminPages/AdminHomePage'
+import AdminStudyPlansPage from './pages/AdminPages/AdminStudyPlansPage';
 
 const App = () => {
   const isAuth = true;
@@ -27,12 +30,20 @@ const App = () => {
                         {/* here we are wrapping up the StudentHomePage to Protect it  */}
                       </ProtectedRoute>
           } />
+          
                   <Route path="/AvailableForms" element={
                         <ProtectedRoute>
                         <AvailableForms />  
                         {/* here we are wrapping up the route to Protect it  */}
                       </ProtectedRoute>
-          } /> 
+          } />
+          <Route path="/StudentImportRecordPage" element={
+            <ProtectedRoute>
+            <StudentImportRecordPage /> 
+            {/* here we are wrapping up the StudentHomePage to Protect it  */}
+          </ProtectedRoute>
+} /> 
+          
         {/*<Route path="*" element={<NotFound />} /> */}
       </Routes>
       </AuthProvider>
