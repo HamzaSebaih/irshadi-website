@@ -10,6 +10,7 @@ import ProtectedRoute from './contexts/ProtectedRoute';
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
 import StudentImportRecordPage from './pages/StudnetPages/StudentImportRecordPage';
+import FillFormPage from './pages/StudnetPages/FillFormPage';
 import AdminHomePage from './pages/AdminPages/AdminHomePage'
 import AdminStudyPlansPage from './pages/AdminPages/AdminStudyPlansPage';
 
@@ -18,6 +19,37 @@ const App = () => {
   const isStudent = true;
   return (
     <BrowserRouter>
+      <AuthProvider>
+        <Nav />
+        <Routes>
+          <Route path="/*" element={<LoginPage />} />
+          <Route path="/ForgetPassPage" element={<ForgetPassPage />} />
+
+
+          <Route path="/ProfileCompletionPage" element={
+            <ProtectedRoute>
+              <ProfileCompletionPage />
+            </ProtectedRoute>} />
+
+          <Route path="/StudentImportRecordPage" element={
+            <ProtectedRoute>
+              <StudentImportRecordPage />
+            </ProtectedRoute>
+          } />
+
+
+
+          <Route path="/FillFormPage" element={
+            <ProtectedRoute>
+              <FillFormPage />
+            </ProtectedRoute>} />
+
+
+          <Route path="/StudentHomePage" element={
+            <ProtectedRoute>
+              <StudentHomePage />
+              {/* here we are wrapping up the StudentHomePage to Protect it  */}
+            </ProtectedRoute>
     <AuthProvider>
       <Nav/>
       <Routes>
@@ -30,13 +62,17 @@ const App = () => {
                         {/* here we are wrapping up the StudentHomePage to Protect it  */}
                       </ProtectedRoute>
           } />
-          
-                  <Route path="/AvailableForms" element={
-                        <ProtectedRoute>
-                        <AvailableForms />  
-                        {/* here we are wrapping up the route to Protect it  */}
-                      </ProtectedRoute>
+
+          <Route path="/AvailableForms" element={
+            <ProtectedRoute>
+              <AvailableForms />
+              {/* here we are wrapping up the route to Protect it  */}
+            </ProtectedRoute>
           } />
+
+
+          {/*<Route path="*" element={<NotFound />} /> */}
+        </Routes>
           <Route path="/StudentImportRecordPage" element={
             <ProtectedRoute>
             <StudentImportRecordPage /> 
