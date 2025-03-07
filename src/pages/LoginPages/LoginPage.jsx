@@ -29,14 +29,21 @@ const LoginPage = () => {
   async function handleGoogleLogin() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-     
+      
+      console.log("Sign-in result:", result);
+      console.log("Is new user:", result.additionalUserInfo?.isNewUser);
+      
+      // Check if it's a new user
+      if (result.additionalUserInfo?.isNewUser) {
+        console.log("Navigating to profile completion page");
         navigate('/ProfileCompletionPage');
-      // } else {
-      //   navigate('/StudentHomePage');
-      // }
+      } else {
+        console.log("Navigating to student home page");
+        navigate('/StudentHomePage');
+      }
     } catch (error) {
       console.error("Google Login Error:", error);
-      setError(`Failed to login with Google: ${error.message}`);
+      setError('Failed to login with Google.');
     }
   }
 
