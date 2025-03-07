@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential } from "firebase/auth";
+
 
 const ProfileCompletionPage = () => {
   const [userProfile, setUserProfile] = useState({
@@ -15,6 +16,7 @@ const ProfileCompletionPage = () => {
   const [showTerms, setShowTerms] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth();
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -52,9 +54,31 @@ const ProfileCompletionPage = () => {
     e.preventDefault();
     if (passwordValid && userProfile.password === userProfile.confirmPassword && agreeTerms) {
       try {
-        navigate("/StudentHomePage");
+        // For an existing user (from Google sign-in), we should link the email/password credential
+        // instead of trying to create a new account
+        const user = auth.currentUser;
+
+        if (user) {
+          // Create an email/password credential
+          const credential = EmailAuthProvider.credential(
+            userProfile.email,
+            userProfile.password
+          );
+
+          // Link the credential to the current user account
+          await linkWithCredential(user, credential);
+
+          // Navigate to home page after successful linking
+          navigate("/StudentHomePage");
+        } else {
+          throw new Error("No user is currently signed in");
+        }
       } catch (error) {
-        console.error("Error saving profile:", error);
+        console.error("Error updating account:", error);
+        setError(`Failed to update account: ${error.message}`);
+
+        // Make the error visible to the user
+        alert(`Failed to update account: ${error.message}`);
       }
     }
   };
