@@ -1,6 +1,5 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from "firebase/firestore"; // Import Firestore
 
 
 const firebaseConfig = {
@@ -14,8 +13,4 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app); // Initialize Firestore
-//maybe we can use our own backend here insted of connecting to the firestore ?
-
-export { auth, db }; 
+export const auth = getAuth(app);

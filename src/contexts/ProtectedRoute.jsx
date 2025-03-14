@@ -8,9 +8,9 @@ export function AdminRoute({ children }) {
     return <Navigate to="/login" />;
   }
 
-  if (user.role !== 'admin') {
-    return <Navigate to="/unauthorized" />;
-  }
+  // if (user.role !== 'admin') {
+  //   return <Navigate to="/unauthorized" />;
+  // }
 
   return children;
 }
@@ -22,9 +22,9 @@ export function UserRoute({ children }) {
     return <Navigate to="/login" />;
   }
 
-  if (user.role !== 'user') {
-    return <Navigate to="/unauthorized" />;
-  }
+  // if (user.role !== 'user') {
+  //   return <Navigate to="/unauthorized" />;
+  // }
 
   return children;
 }
