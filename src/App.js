@@ -5,12 +5,13 @@ import ProfileCompletionPage from './pages/LoginPages/ProfileCompletionPage'
 import StudentHomePage from './pages/StudnetPages/StudentHomePage';
 import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './contexts/ProtectedRoute';
+import { AdminRoute, UserRoute } from './contexts/ProtectedRoute';
 
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
 import StudentImportRecordPage from './pages/StudnetPages/StudentImportRecordPage';
 import FillFormPage from './pages/StudnetPages/FillFormPage';
+import AdminHomePage from './pages/AdminPages/AdminHomePage';
 
 const App = () => {
   const isAuth = true;
@@ -25,38 +26,44 @@ const App = () => {
 
 
           <Route path="/ProfileCompletionPage" element={
-            <ProtectedRoute>
+            <UserRoute>
               <ProfileCompletionPage />
-            </ProtectedRoute>} />
+            </UserRoute>} />
 
           <Route path="/StudentImportRecordPage" element={
-            <ProtectedRoute>
+            <UserRoute>
               <StudentImportRecordPage />
-            </ProtectedRoute>
+            </UserRoute>
           } />
 
 
 
           <Route path="/FillFormPage" element={
-            <ProtectedRoute>
+            <UserRoute>
               <FillFormPage />
-            </ProtectedRoute>} />
+            </UserRoute>} />
 
 
           <Route path="/StudentHomePage" element={
-            <ProtectedRoute>
+            <UserRoute>
               <StudentHomePage />
               {/* here we are wrapping up the StudentHomePage to Protect it  */}
-            </ProtectedRoute>
+            </UserRoute>
           } />
 
           <Route path="/AvailableForms" element={
-            <ProtectedRoute>
+            <UserRoute>
               <AvailableForms />
               {/* here we are wrapping up the route to Protect it  */}
-            </ProtectedRoute>
+            </UserRoute>
           } />
 
+         <Route path="/AdminHomePage" element={
+            <AdminRoute>
+              <AdminHomePage />
+              {/* here we are wrapping up the route to Protect it  */}
+            </AdminRoute>
+          } />
 
           {/*<Route path="*" element={<NotFound />} /> */}
         </Routes>

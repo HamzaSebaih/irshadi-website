@@ -11,7 +11,7 @@ app = Flask(__name__)
 # Initialize Firestore
 cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsdk-fbsvc-9e96fac39e.json")  # this is the credentials that will be used to connect with the firestore
 firebase_admin.initialize_app(cred) #here we make a connection with firebase using our credentials, 
-db = firestore.client()  # This is your Firestore database object, here we create a connection to our firestore database, 
+db = firestore.client()  # This is our Firestore database object, here we create a connection to our firestore database, 
 
 # Test route
 @app.route('/')
