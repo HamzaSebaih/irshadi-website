@@ -28,24 +28,33 @@ const LoginPage = () => {
 
   async function handleGoogleLogin() {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      
-      console.log("Sign-in result:", result);
-      console.log("Is new user:", result.additionalUserInfo?.isNewUser);
-      
-      // Check if it's a new user
-      if (result.additionalUserInfo?.isNewUser) {
-        console.log("Navigating to profile completion page");
-        navigate('/ProfileCompletionPage');
-      } else {
-        console.log("Navigating to student home page");
-        navigate('/StudentHomePage');
-      }
+        const result = await signInWithPopup(auth, googleProvider);
+
+        console.log("Sign-in result:", result);
+        console.log("Is new user:", result.additionalUserInfo?.isNewUser);
+
+        // Check if the email ends with "kau.edu.sa"
+        if (result.user?.email?.endsWith("kau.edu.sa")) {
+          if (result.additionalUserInfo?.isNewUser) {
+            console.log("Navigating to profile completion page");
+            navigate('/ProfileCompletionPage');
+        } else {
+            console.log("Navigating to student home page");
+            navigate('/StudentHomePage');
+        }
+        }
+        else{
+          setError("Please ensure to use you'r univerity account")
+        }
+
+        
     } catch (error) {
-      console.error("Google Login Error:", error);
-      setError('Failed to login with Google.');
+        console.error("Google Login Error:", error);
+        setError('Failed to login with Google.');
     }
-  }
+}
+
+
 
   return (
     <div className="flex min-h-screen">
