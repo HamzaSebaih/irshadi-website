@@ -20,7 +20,7 @@ const ForgetPassPage = () => {
       await sendPasswordResetEmail(auth, email);
       setMessage("Password reset link has been sent to your email!");
       // Optional: automatically redirect after a few seconds
-      setTimeout(() => navigate('/login'), 5000);
+      setTimeout(() => navigate('/*'), 5000);
     } catch (error) {
       if (error.code === 'auth/user-not-found') {
         setError('No account found with this email address.');
@@ -41,7 +41,7 @@ const ForgetPassPage = () => {
         </h1>
         <div className="flex-1 flex items-center justify-center">
           <img 
-            src="/api/placeholder/400/400"
+            src=""
             alt="Runner illustration"
             className="w-2/3"
           />
