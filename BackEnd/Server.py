@@ -187,20 +187,20 @@ def update_student_data(uid):
         raise ValueError("No HTML provided")
     
     # Reference to the student document in Firestore
-    student_document = db.collection('students').document(uid)
-    
+    student_document = db.collection('Students').document(uid)
+
     # Step 1: Extract good information from HTML body
     soup = BeautifulSoup(html, 'html.parser')
-    
     # General info extraction
     general_info = {}
     
     # Student ID (from top table)
     top_table = soup.find('table', class_='plaintable')
     if top_table:
-        student_info = top_table.find('td', class_='pldefault', attrs={'width': '25%'})
-        if student_info:
-            lines = student_info.text.strip().split('\n')
+        student_info = top_table.find('td', class_='pldefault', attrs={'width': '100%'}) #the student_info is null here so we have a problem in extracting it's information in the code below
+
+        if student_info: #here we start to have problms I think but the code will still works so the problem is in other things also
+            lines = student_info.text.strip().split('\n') 
             general_info['Student_ID'] = lines[0].split()[0]  # e.g., "2135813"
     
     # Academic info table
