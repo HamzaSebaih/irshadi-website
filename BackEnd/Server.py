@@ -1,6 +1,7 @@
 #this is the server program.
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS #don't forget to pip install this if not exist @AbdulazizJastanieh
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from functools import wraps
@@ -17,7 +18,7 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-
+CORS(app) #this cors are used to fix the front end request however I read its bad for deployoment @AbdulazizJastanieh
 # Initialize Firestore
 cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsdk-fbsvc-9e96fac39e.json")  # this is the credentials that will be used to connect with the firestore
 firebase_admin.initialize_app(cred) #here we make a connection with firebase using our credentials, 
