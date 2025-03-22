@@ -108,7 +108,7 @@ def token_required(f):
 
     return decorated_function
 
-@app.route('/generate-code', methods=['POST'])
+@app.route('/generateCode', methods=['POST'])
 @token_required
 def generate_code(decoded_token):
     #NOTE GOAL is to generate a otp code, create a document within a collection to represent otp code
@@ -131,7 +131,7 @@ def generate_code(decoded_token):
     # Return the code to the frontend
     return jsonify({"code": code}), 200
 
-@app.route('/extensionupdate', methods=['POST'])
+@app.route('/extensionUpdate', methods=['POST'])
 
 def handle_extension_update():
     #NOTE goal is to handle a request from extensions, and call the function to update student data.
@@ -313,8 +313,6 @@ def add_Student(decoded_token):
         return jsonify({"message": "Data added successfully!"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
 
 @app.route('/addStudent-testing', methods=['POST'])
 def add_Student_testing():
