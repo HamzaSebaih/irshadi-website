@@ -1,6 +1,7 @@
 #this is the server program.
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS #don't forget to pip install this if not exist @AbdulazizJastanieh
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from functools import wraps
@@ -17,7 +18,7 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-
+CORS(app) #this cors are used to fix the front end request however I read its bad for deployoment @AbdulazizJastanieh
 # Initialize Firestore
 cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsdk-fbsvc-9e96fac39e.json")  # this is the credentials that will be used to connect with the firestore
 firebase_admin.initialize_app(cred) #here we make a connection with firebase using our credentials, 
@@ -187,19 +188,19 @@ def update_student_data(uid):
     
     # Reference to the student document in Firestore
     student_document = db.collection('Students').document(uid)
-    
+
     # Step 1: Extract good information from HTML body
     soup = BeautifulSoup(html, 'html.parser')
-    
     # General info extraction
     general_info = {}
     
     # Student ID (from top table)
     top_table = soup.find('table', class_='plaintable')
     if top_table:
-        student_info = top_table.find('td', class_='pldefault', attrs={'width': '25%'})
-        if student_info:
-            lines = student_info.text.strip().split('\n')
+        student_info = top_table.find('td', class_='pldefault', attrs={'width': '100%'}) #the student_info is null here so we have a problem in extracting it's information in the code below
+
+        if student_info: #here we start to have problms I think but the code will still works so the problem is in other things also
+            lines = student_info.text.strip().split('\n') 
             general_info['Student_ID'] = lines[0].split()[0]  # e.g., "2135813"
     
     # Academic info table
