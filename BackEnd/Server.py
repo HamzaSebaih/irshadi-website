@@ -186,76 +186,107 @@ def update_student_data(uid):
     if not html:
         raise ValueError("No HTML provided")
     
+    
+    # Reference to the student document in Firestore
+    # Goal: Update the student document with info from an HTML file
+    
     # Reference to the student document in Firestore
     student_document = db.collection('Students').document(uid)
-
-    # Step 1: Extract good information from HTML body
+    
+    # Parse HTML
     soup = BeautifulSoup(html, 'html.parser')
+    
     # General info extraction
     general_info = {}
     
-    # Student ID (from top table)
-    top_table = soup.find('table', class_='plaintable')
-    if top_table:
-        student_info = top_table.find('td', class_='pldefault', attrs={'width': '100%'}) #the student_info is null here so we have a problem in extracting it's information in the code below
+    # Find the academic info table
+    academic_tables = soup.find_all('table', class_='datadisplaytable', attrs={'border': '1', 'width': '800'})
+    academic_table = None
+    for table in academic_tables:
+        prev_elem = table.find_previous('td', class_='pldefault')
+        if prev_elem and 'معلومات الطالب الاكاديمية' in prev_elem.text:
+            academic_table = table
+            break
 
-        if student_info: #here we start to have problms I think but the code will still works so the problem is in other things also
-            lines = student_info.text.strip().split('\n') 
-            general_info['Student_ID'] = lines[0].split()[0]  # e.g., "2135813"
-    
-    # Academic info table
-    academic_table = soup.find('table', class_='datadisplaytable', border='1')
+    # Assuming academic_table is the BeautifulSoup object for the academic info table
     if academic_table:
+        print("Academic table found, extracting rows...")
         rows = academic_table.find_all('tr')
         for row in rows:
-            cols = row.find_all('th')
-            values = row.find_all('td')
-            if len(cols) == 1 and len(values) == 1:
-                key = cols[0].text.strip()
-                value = values[0].text.strip()
+            # Find all th and td elements in the row
+            ths = row.find_all('th', class_='ddheader')
+            tds = row.find_all('td', class_='dddefault')
+            # Pair each th with its corresponding td
+            for i in range(len(ths)):
+                key = ths[i].text.strip()
+                value = tds[i].text.strip()
+                print(f"Extracted: Key='{key}', Value='{value}'")
+                
+                # Matching logic for each key
                 if key == 'رقم الطالب':  # Student ID
                     general_info['Student_ID'] = value
+                    print("Matched: Student ID")
                 elif key == 'التخصص':  # Major
                     general_info['major'] = value
+                    print("Matched: Major")
                 elif key == 'الساعات المسجلة':  # Registered Hours
-                    general_info['hours_registered'] = int(value)
+                    try:
+                        general_info['hours_registered'] = int(value)
+                        print("Matched: Registered Hours")
+                    except ValueError:
+                        general_info['hours_registered'] = 0
                 elif key == 'الساعات المجتازة':  # Completed Hours
-                    general_info['hours_completed'] = int(value)
+                    try:
+                        general_info['hours_completed'] = int(value)
+                        print("Matched: Completed Hours")
+                    except ValueError:
+                        general_info['hours_completed'] = 0
                 elif key == 'ساعات المعدل':  # Total Hours
-                    general_info['hours_total'] = int(value)
+                    try:
+                        general_info['hours_total'] = int(value)
+                        print("Matched: Total Hours")
+                    except ValueError:
+                        general_info['hours_total'] = 0
                 elif key == 'الساعات المحولة':  # Exchanged Hours
-                    general_info['hours_exchanged'] = int(value)
+                    try:
+                        general_info['hours_exchanged'] = int(value)
+                        print("Matched: Exchanged Hours")
+                    except ValueError:
+                        general_info['hours_exchanged'] = 0
                 elif key == 'المعدل':  # GPA
-                    general_info['gpa'] = float(value)
+                    try:
+                        general_info['gpa'] = float(value)
+                        print("Matched: GPA")
+                    except ValueError:
+                        general_info['gpa'] = 0.0
+    else:
+        print("Error: Academic table not found")
 
-    # Extract only course codes for completed courses
+    # Extract finished courses from transcript tables
     finished_courses = []
-    tables = soup.find_all('table', class_='datadisplaytable', border='1')
-    for table in tables:
-        # Skip semester header tables
-        header = table.find('td', class_='dddefault')
-        if header and 'الفصل الدراسي' in header.text:
-            continue
-        
-        # Process course table
-        rows = table.find_all('tr')
-        headers = [th.text.strip() for th in rows[0].find_all('th')] if rows else []
-        if 'المقرر' in headers:  # Course table
-            for row in rows[1:]:  # Skip header row
-                cols = row.find_all('td')
+    for table in academic_tables:
+        headers = [th.text.strip() for th in table.find_all('th', class_='ddheader')]
+        if 'مسجلة' in headers and 'مجتازة' in headers and 'التقدير' in headers:
+            print("Found transcript table, extracting courses...")
+            rows = table.find_all('tr')[1:]  # Skip header row
+            for row in rows:
+                cols = row.find_all('td', class_='dddefault')
                 if len(cols) >= 7:
-                    course_code = cols[1].text.strip()  # المقرر (e.g., CPIT-334)
-                    hours_registered = int(cols[4].text.strip())  # مسجلة
-                    hours_passed = int(cols[5].text.strip())  # مجتازة
-                    grade = cols[7].text.strip()  # التقدير
-                    
-                    # Only include if hours match (successfully completed) and grade isn’t NP
-                    if hours_registered == hours_passed and grade != 'F' and grade!= 'W':
+                    dept = cols[0].text.strip()
+                    course_num = cols[1].text.strip()
+                    course_code = f"{dept}-{course_num}"
+                    try:
+                        hours_registered = int(cols[3].text.strip())
+                        hours_passed = int(cols[4].text.strip())
+                    except ValueError:
+                        continue
+                    grade = cols[6].text.strip()
+                    if hours_registered == hours_passed and grade not in ['F', 'W']:
                         finished_courses.append(course_code)
 
     # Structure extracted data
     extracted_data = {
-        "Student_ID": general_info.get('Student_ID'),
+        "Student_ID": general_info.get('Student_ID', ''),
         "hours": {
             "registered": general_info.get('hours_registered', 0),
             "completed": general_info.get('hours_completed', 0),
@@ -267,19 +298,14 @@ def update_student_data(uid):
         "Finished_Courses": finished_courses
     }
     
-    # Step 2: Update and add extracted info to student document
-    # Fetch existing document
+    # Update Firestore document
     doc = student_document.get()
     if not doc.exists:
         raise ValueError("Student not found")
     
-    # Existing data
     existing_data = doc.to_dict()
-    
-    # Preserve the existing name as a string
-    name_str = existing_data.get("name", "")  # Default to empty string if missing
+    name_str = existing_data.get("name", "")
 
-    # Update with extracted data
     updated_data = {
         "Student_ID": extracted_data["Student_ID"],
         "hours": {
@@ -289,13 +315,16 @@ def update_student_data(uid):
             "completed": extracted_data["hours"]["completed"]
         },
         "gpa": extracted_data["gpa"],
-        "name": name_str,  # Preserve original name as a string
+        "name": name_str,
         "major": extracted_data["major"],
         "Finished_Courses": extracted_data["Finished_Courses"]
     }
     
-    # Update Firestore document
     student_document.set(updated_data, merge=True)
+    
+    print("Extracted Data:", extracted_data)
+    print("")
+    print("Updated Firestore document with data:", updated_data)
     
 @app.route('/addStudent', methods=['POST'])
 @admin_required
