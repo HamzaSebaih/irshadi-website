@@ -186,7 +186,7 @@ def update_student_data(uid):
         raise ValueError("No HTML provided")
     
     # Reference to the student document in Firestore
-    student_document = db.collection('students').document(uid)
+    student_document = db.collection('Students').document(uid)
     
     # Step 1: Extract good information from HTML body
     soup = BeautifulSoup(html, 'html.parser')
