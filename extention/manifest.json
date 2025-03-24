@@ -1,6 +1,6 @@
 {
     "name": "Irshadi Platform",
-    "description": "Base Level Extension",
+    "description": "Irshadi platform Extension that will helo students extract their data in a quick and easy way",
     "version": "1.0",
     "manifest_version": 3,
     "icons": {
