@@ -537,7 +537,7 @@ def update_student_data(uid):
                     except ValueError:
                         continue
                     grade = cols[6].text.strip()
-                    if hours_registered == hours_passed and grade not in ['F', 'W']:
+                    if hours_registered == hours_passed and grade not in ['F', 'W','DN']:
                         finished_courses.append(course_code)
 
     # Structure extracted data
