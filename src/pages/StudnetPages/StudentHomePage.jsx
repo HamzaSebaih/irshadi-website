@@ -1,10 +1,40 @@
 import { useNavigate } from "react-router-dom"; // ✅ Correct import
-import StudentImportRecordPage from "./StudentImportRecordPage"; // ✅ Check if default export
+import { useAuth } from "../../contexts/AuthContext";
+import { useEffect, useState } from "react";
 
 const StudentHomePage = () => {
-    const studentName = "Ali Hamza";
-    const currentProgress = "X/40 hours";
-    const lastUpdate = "2025";
+    const backendIp = "http://127.0.0.1:5000"; //this the ip domain for the backend
+    const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
+    const [userData, setUserData] = useState(null);
+    const token = user.accessToken //we get the token here 
+
+    useEffect(() => {
+        if (!token) return; // Prevent fetching if token is missing
+    
+        const fetchData = async () => {
+          try {
+            const response = await fetch(`${backendIp}/login`, {
+              method: "POST",
+              headers: {
+                "Authorization": `${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+    
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+    
+            const respObj = await response.json();
+            setUserData(respObj);
+          } catch (error) {
+            console.error("Error fetching user data:", error);
+          }
+        };
+    
+        fetchData();
+      }, [user]);
+
     const navigate = useNavigate(); // ✅ Correct way to use navigation
 
     return (
@@ -16,13 +46,13 @@ const StudentHomePage = () => {
                     <div className="space-y-8 text-xl">
                         <h3 className="text-2xl font-semibold text-gray-700">Current Student Info:</h3>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Name:</span> {studentName}
+                            <span className="font-medium text-gray-900">Name:</span> {userData?.name}
                         </p>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Current Progress:</span> {currentProgress}
+                            <span className="font-medium text-gray-900">Current Progress:</span> {userData?.hours.total}
                         </p>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Last Update of Academic Records:</span> {lastUpdate}
+                            <span className="font-medium text-gray-900">Last Update of Academic Records:</span> {userData?.lastUpdate}
                         </p>
                     </div>
                 </div>
