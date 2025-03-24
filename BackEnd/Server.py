@@ -1,7 +1,8 @@
 #this is the server program.
 
+#Importing Section ___________
 from flask import Flask, jsonify, request
-from flask_cors import CORS #don't forget to pip install this if not exist @AbdulazizJastanieh
+from flask_cors import CORS 
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from functools import wraps
@@ -12,8 +13,10 @@ import datetime
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-# Load environment variables (optional, for production)
-load_dotenv()
+
+#End of Importing Section ___________
+
+load_dotenv() # Load environment variables (optional, for production)
 
 
 # Initialize Flask app
@@ -24,34 +27,8 @@ cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsd
 firebase_admin.initialize_app(cred) #here we make a connection with firebase using our credentials, 
 db = firestore.client()  # This is your Firestore database object, here we create a connection to our firestore database, 
 
-# Test route
-@app.route('/')
-def home():
-    return "Welcome to Flask with Firestore!"
 
-
-def verify_firebase_token(id_token): 
-    #this is a normal function, that receives a parameter that should be the authentication token.
-    #then it calls the firebase authentication to make sure that the token is valid, its good 
-    #then after that it obtains the decoded version, which will contain the user info connected to the token 
-    #and returns the decoded token.
-
-    #this is used in the decorated functions
-    try:
-        decoded_token = auth.verify_id_token(id_token)
-        return decoded_token  # Contains user info (e.g., uid, email)
-    except Exception as e:
-        return None  # Token is invalid
-
-def generate_random_code():
-    return str(random.randint(100000, 999999))  # Generates a 6-digit number, e.g., "483920"
-
-def get_uid_by_email(email):
-    try:
-        user = auth.get_user_by_email(email)
-        return user.uid  # Return the UID associated with the email
-    except auth.UserNotFoundError:
-        return None  # No user found with this email
+#General Functions Section _______________
 
 def admin_required(f):
     #For full explination go to CodeNotes.py file
@@ -109,6 +86,112 @@ def token_required(f):
 
     return decorated_function
 
+@app.route('/login', methods=['POST'])
+@token_required
+def login(*args, **kwargs):
+    #Goal: THIS IS THE MAIN LOGIN FUNCTION. 
+    #it creates a file for the logged person and return its information + role
+    #or just return his information.
+    try:
+        # Extract decoded token passed by the token_required decorator
+        decoded_token = kwargs.get('decoded_token')
+
+        # Extract UID, email, and name from the decoded Firebase token
+        uid = decoded_token.get('uid')
+        email = decoded_token.get('email')
+        name = decoded_token.get('name')
+
+        if not uid or not email:
+            return jsonify({"error": "UID or email missing in token"}), 400
+
+        # Fallback for name if it's not in the token
+        if not name:
+            name = email.split('@')[0]  # Derive from email as a fallback
+
+        # Step 1: Check for a "file" named after the email (assumed to be a Firestore doc in 'pendingAdmins')
+        pending_admin_ref = db.collection('pendingAdmins').document(email)
+        pending_admin_doc = pending_admin_ref.get()
+
+        if pending_admin_doc.exists:
+            # This user is a new admin
+            # "Rename the file" by moving the data to the 'admins' collection with UID as the document ID
+            admin_data = {
+                "name": name,  # Use name 
+                "email": email,
+                "role": "admin"  # 
+            }
+            # Create the admin document
+            db.collection('admins').document(uid).set(admin_data)
+            # Delete the pending admin "file"
+            pending_admin_ref.delete()
+            # Return the admin data directly (flattened)
+            return jsonify(admin_data), 200
+
+        # Step 2: Check if UID exists in the 'admins' collection
+        admin_ref = db.collection('admins').document(uid)
+        admin_doc = admin_ref.get()
+
+        if admin_doc.exists:
+            # User is an existing admin
+            # Return the admin document directly 
+            return jsonify(admin_doc.to_dict()), 200
+
+        # Step 3: Check if UID exists in the 'students' collection
+        student_ref = db.collection('students').document(uid)
+        student_doc = student_ref.get()
+
+        if student_doc.exists:
+            # User is an existing student
+            # Add role to the student data and return doc
+            student_data = student_doc.to_dict()
+            student_data["role"] = "student"
+            return jsonify(student_data), 200
+
+        # Step 4: If UID is not in either collection, create a new student
+        new_student_data = {
+            "name": name,  # Use name from token (or fallback)
+            "email": email,
+            "gpa": 0.0,  # Default values for student fields
+            "hours": {
+                "registered": 0,
+                "completed": 0,
+                "total": 0,
+                "exchanged": 0
+            },
+            "finishedCourses": [] 
+        }
+        student_ref.set(new_student_data)
+
+        # Return the new student data directly (flattened)
+        return jsonify(new_student_data), 200
+
+    except Exception as e:
+        return jsonify({"error": "Login failed", "details": str(e)}), 500
+
+
+def verify_firebase_token(id_token): 
+    #this is a normal function, that receives a parameter that should be the authentication token.
+    #then it calls the firebase authentication to make sure that the token is valid, its good 
+    #then after that it obtains the decoded version, which will contain the user info connected to the token 
+    #and returns the decoded token.
+
+    #this is used in the decorated functions
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        return decoded_token  # Contains user info (e.g., uid, email)
+    except Exception as e:
+        return None  # Token is invalid
+
+def generate_random_code():
+    return str(random.randint(100000, 999999))  # Generates a 6-digit number, e.g., "483920"
+
+def get_uid_by_email(email):
+    try:
+        user = auth.get_user_by_email(email)
+        return user.uid  # Return the UID associated with the email
+    except auth.UserNotFoundError:
+        return None  # No user found with this email
+
 @app.route('/generateCode', methods=['POST'])
 @token_required
 def generate_code(decoded_token):
@@ -132,8 +215,180 @@ def generate_code(decoded_token):
     # Return the code to the frontend
     return jsonify({"code": code}), 200
 
-@app.route('/extensionUpdate', methods=['POST'])
+#End Of General Functions Section _______________
 
+#Admin Functions Section _______________
+
+@app.route('/addadmin', methods=['POST'])
+@admin_required
+def add_admin(decoded_token):
+    #GOAL: add an admin
+    try:
+        # Step 1: Extract the email from the request body (JSON)
+        data = request.get_json()
+        if not data or 'email' not in data:
+            return jsonify({"error": "Email is missing in request body"}), 400
+        email = data['email']
+
+        # Step 2: Get the UID associated with the email
+        uid = get_uid_by_email(email)
+        if uid is None:
+            # No UID found, create a document in pendingAdmins with email as document ID
+            pending_admin_ref = db.collection('pendingAdmins').document(email)
+            pending_admin_ref.set({"email": email})
+            return jsonify({"message": f"Admin pending creation for email: {email}"}), 200
+
+        # Step 3: Check if the UID belongs to an admin or student
+        admin_ref = db.collection('Admins').document(uid)  # Using 'Admins' to match decorator
+        admin_doc = admin_ref.get()
+        if admin_doc.exists:
+            return jsonify({"error": "Email already belongs to an admin"}), 400
+
+        student_ref = db.collection('students').document(uid)
+        student_doc = student_ref.get()
+        if student_doc.exists:
+            # Retrieve name and email from the student document
+            student_data = student_doc.to_dict()
+            name = student_data.get('name')
+            email = student_data.get('email')
+
+            # Validate that name and email exist in the student document
+            if not name or not email:
+                return jsonify({"error": "Student document missing name or email"}), 500
+
+            # Delete the student document
+            student_ref.delete()
+
+            # Create a new admin document
+            admin_data = {
+                "name": name,
+                "email": email,
+                "role": "admin"
+            }
+            admin_ref.set(admin_data)
+            return jsonify({"message": "Student promoted to admin successfully"}), 200
+
+        # If UID exists but not in admins or students, return an error
+        return jsonify({"error": "User exists but not found in admins or students collections"}), 400
+
+    except Exception as e:
+        return jsonify({"error": "Failed to add admin", "details": str(e)}), 500
+
+@app.route('/deleteadmin', methods=['POST'])
+@admin_required
+def delete_admin(decoded_token):
+    #Goal: delete a pending or existing admin.
+    try:
+        # Step 1: Extract the email from the request body (JSON)
+        data = request.get_json()
+        if not data or 'email' not in data:
+            return jsonify({"error": "Email is missing in request body"}), 400
+        email = data['email']
+
+        # Step 2: Check if the email belongs to a pending admin
+        pending_admin_ref = db.collection('pendingAdmins').document(email)
+        pending_admin_doc = pending_admin_ref.get()
+        if pending_admin_doc.exists:
+            # Delete the pending admin document
+            pending_admin_ref.delete()
+            return jsonify({"message": f"Pending admin with email {email} has been deleted"}), 200
+
+        # Step 3: Find the UID associated with the email
+        uid = get_uid_by_email(email)
+        if uid is None:
+            return jsonify({"error": f"No user found with email: {email}"}), 404
+
+        # Step 4: Check if the UID belongs to an admin in the Admins collection
+        admin_ref = db.collection('Admins').document(uid)
+        admin_doc = admin_ref.get()
+        if admin_doc.exists:
+            # Delete the admin document
+            admin_ref.delete()
+            return jsonify({"message": f"Admin with email {email} has been deleted"}), 200
+        else:
+            return jsonify({"error": f"User with email {email} is not an admin"}), 400
+
+    except Exception as e:
+        return jsonify({"error": "Failed to delete admin", "details": str(e)}), 500
+
+@app.route('/deleteadmin', methods=['POST'])
+@admin_required
+def delete_admin(decoded_token):
+    None
+
+@app.route('/addCourse', methods=['POST'])
+@admin_required
+def add_Course(decoded_token):#WIP Strucutre
+    #NOTE GOAL: adding a course to the courses collection
+    #KIND OF WIP since no Structure is specified, we just take json and put it as is, we don't check
+    try:
+        # Get data from the request (e.g., JSON payload)
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        course_code = data.get("course_code")
+        course_number = data.get("course_number")
+        DocumentName = course_code + "_" + course_number
+        # Add data to Firestore
+        db.collection('Courses').document(DocumentName).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
+        return jsonify({"message": "Data added successfully!"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/delete/<user_id>', methods=['DELETE'])
+@admin_required
+def delete_data(user_id, decoded_token):#WIP
+     #NOTE Goal: deleting a user document from the Students/Admins Collection collections
+     #NOTE WIP
+    try:
+        # Delete the document
+        
+        return jsonify({"message": "Data deleted successfully!"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/addSurvey', methods=['POST'])
+@admin_required
+def add_Survey(decoded_token):#WIP Structure
+    #GOAL: add a new survey to the survey collection
+    #WIP Strucutre is not strict. dependent on frontend
+    try:
+        # Get data from the request (e.g., JSON payload)
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        survey_id = data.get("Survey_ID") #extracts the id key value
+        # Add data to Firestore
+        db.collection('Surveys').document(survey_id).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
+        return jsonify({"message": "Data added successfully!"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/addAdmin', methods=['POST'])
+@admin_required
+def add_Admin():
+    #GOAL: given an email, take the user associated and make him an admin
+    #by creating a file for him in the admins collection representing his account
+    #and deleting his old file if he was a previous student
+    #NOTE WIP
+    try:
+        
+        
+        return jsonify({"message": "Data added successfully!"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+#End of Admin Functions Section _______________
+
+#Students Functions Section _______________
+
+@app.route('/extensionUpdate', methods=['POST'])
 def handle_extension_update():
     #NOTE goal is to handle a request from extensions, and call the function to update student data.
 
@@ -177,9 +432,10 @@ def handle_extension_update():
         # Catch any other unexpected errors
         return jsonify({"error": "An unexpected error occurred: " + str(e)}), 500
 
-# function for updating user data
 def update_student_data(uid):
-    # Goal: Update the student document with info from the HTML request sent by the extension
+    # This function doesn't have a route, and its used through the function: 
+    #handle_extension_update
+    #NOTE Goal: Update the student document with info from the HTML request sent by the extension
     
     # Access the HTML from the Flask request body
     html = request.data.decode('utf-8')
@@ -326,23 +582,23 @@ def update_student_data(uid):
     print("")
     print("Updated Firestore document with data:", updated_data)
     
-@app.route('/addStudent', methods=['POST'])
-@admin_required
-def add_Student(decoded_token):
-    #route for adding a Student document to the Students collections by using the id given 
-    
+
+@app.route('/addResponse', methods=['POST'])
+@token_required
+def add_Response(decoded_token):#WIP, Response Structure WIP
+    #NOTE Goal is adding a response document to the SurveyResponses collections, 
+    #WIP, Response Structure WIP
     try:
-        # Get data from the request (e.g., JSON payload)
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
         
-        StudentID = data.get("Student_ID") #extracts the id key value
-        # Add data to Firestore
-        db.collection('Students').document(StudentID).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
         return jsonify({"message": "Data added successfully!"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+#End Students Functions Section _______________
+
+#Other functions (niche,useless,etc) _______________
+
 
 @app.route('/addStudent-testing', methods=['POST'])
 def add_Student_testing():
@@ -362,131 +618,27 @@ def add_Student_testing():
         return jsonify({"error": str(e)}), 500
     
 
-@app.route('/addCourse', methods=['POST'])
+@app.route('/addStudentggg', methods=['POST'])
 @admin_required
-def add_Course(decoded_token):
-    #route for adding  a course document to the courses collections by using the coursecode and course number given 
-    try:
-        # Get data from the request (e.g., JSON payload)
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-
-        course_code = data.get("course_code")
-        course_number = data.get("course_number")
-        DocumentName = course_code + "_" + course_number
-        # Add data to Firestore
-        db.collection('Courses').document(DocumentName).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/addAdmin', methods=['POST'])
-def add_Admin():
-    #route for adding a admin document to the admin collection by using the id given 
+def add_Student(decoded_token):#Kind of useless
+    #route for adding a Student document to the Students collections by using the id given 
+    
     try:
         # Get data from the request (e.g., JSON payload)
         data = request.json
         if not data:
             return jsonify({"error": "No data provided"}), 400
         
-        AdminID = data.get("Admin_ID") #extracts the id key value
+        StudentID = data.get("Student_ID") #extracts the id key value
         # Add data to Firestore
-        db.collection('Admins').document(AdminID).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/addSurvey', methods=['POST'])
-@admin_required
-def add_Survey(decoded_token):
-    #route for adding a survey document to the survey collection by using the id given 
-    try:
-        # Get data from the request (e.g., JSON payload)
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        survey_id = data.get("Survey_ID") #extracts the id key value
-        # Add data to Firestore
-        db.collection('Surveys').document(survey_id).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
+        db.collection('Students').document(StudentID).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
         return jsonify({"message": "Data added successfully!"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+#End of Other functions (niche,useless,etc) _______________
 
-@app.route('/addResponse', methods=['POST'])
-@token_required
-def add_Response(decoded_token):
-    #route for adding a response document to the reponses collections by using the id given 
-    try:
-        # Get data from the request (e.g., JSON payload)
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        Student_ID = data.get("Student_ID") #extracts the student id 
-        Survey_ID = data.get("Survey_ID") #extract the survey id
-
-        Documentname = Student_ID + "_" + Survey_ID #resposne key
-        # Add data to Firestore
-        db.collection('SurveyResponses').document(Documentname).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
-
-@app.route('/getStudent/<user_id>', methods=['GET'])
-@admin_required
-def get_data(user_id, decoded_token):
-
-    #route for retrieving a user document  from the users collections
-    try:
-        # Get a document by ID
-        user_ref = db.collection('Students').document(user_id) #this createse a pointer to the document with the specificed user_id
-        user = user_ref.get() #here we fetch the document snapshot 
-        if user.exists:
-            return jsonify(user.to_dict()), 200
-        else:
-            return jsonify({"error": "User not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
-@app.route('/update/<user_id>', methods=['PUT'])
-@admin_required
-def update_data(user_id, decoded_token):
-    #route for updating a user document  from the users collections
-    try:
-        # Get updated data from the request
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-
-        # Update the document
-        user_ref = db.collection('users').document(user_id)
-        user_ref.update(data)
-        return jsonify({"message": "Data updated successfully!"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
-@app.route('/delete/<user_id>', methods=['DELETE'])
-@admin_required
-def delete_data(user_id, decoded_token):
-     #route for deleting a user document  from the users collections
-    try:
-        # Delete the document
-        db.collection('users').document(user_id).delete()
-        return jsonify({"message": "Data deleted successfully!"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 
