@@ -5,7 +5,7 @@ import ProfileCompletionPage from './pages/LoginPages/ProfileCompletionPage'
 import StudentHomePage from './pages/StudnetPages/StudentHomePage';
 import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
-import { AdminRoute, UserRoute } from './contexts/ProtectedRoute';
+import { AdminRoute,StudentRoute } from './contexts/ProtectedRoute';
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
@@ -13,6 +13,7 @@ import StudentImportRecordPage from './pages/StudnetPages/StudentImportRecordPag
 import FillFormPage from './pages/StudnetPages/FillFormPage';
 import AdminHomePage from './pages/AdminPages/AdminHomePage';
 import LoadingPage from './pages/LoginPages/LoadingPage';
+import Unauthorized from './pages/LoginPages/Unauthorized';
 
 const App = () => {
 
@@ -23,37 +24,37 @@ const App = () => {
         <Routes>
           <Route path="/*" element={<LoginPage />} />
           <Route path="/ForgetPassPage" element={<ForgetPassPage />} />
+          <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/Loading" element={<LoadingPage />} />
-
           <Route path="/ProfileCompletionPage" element={
-            <UserRoute>  {/* here we are wrapping up the route to Protect it  */}
+            <StudentRoute>  {/* here we are wrapping up the route to Protect it  */}
               <ProfileCompletionPage />
-            </UserRoute>} />
+            </StudentRoute>} />
 
           <Route path="/StudentImportRecordPage" element={
-            <UserRoute> {/* here we are wrapping up the route to Protect it  */}
+            <StudentRoute> {/* here we are wrapping up the route to Protect it  */}
               <StudentImportRecordPage />
-            </UserRoute>
+            </StudentRoute>
           } />
 
           <Route path="/FillFormPage" element={
-            <UserRoute>
+            <StudentRoute>
               <FillFormPage />
-            </UserRoute>} />
+            </StudentRoute>} />
 
 
           <Route path="/StudentHomePage" element={
-            <UserRoute>
+            <StudentRoute>
               <StudentHomePage />
               {/* here we are wrapping up the StudentHomePage to Protect it  */}
-            </UserRoute>
+            </StudentRoute>
           } />
 
           <Route path="/AvailableForms" element={
-            <UserRoute>
+            <StudentRoute>
               <AvailableForms />
               {/* here we are wrapping up the route to Protect it  */}
-            </UserRoute>
+            </StudentRoute>
           } />
 
          <Route path="/AdminHomePage" element={
