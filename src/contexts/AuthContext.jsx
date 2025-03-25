@@ -34,23 +34,20 @@ export function AuthProvider({ children }) {
           }
 
           const respObj = await response.json();
+          setUser({ ...firebaseUser, ...respObj }); // here we append respObj to the Firebase user object
 
-          // append respObj to the Firebase user object and update state
-          setUser({ ...firebaseUser, ...respObj });
         } catch (error) {
           console.error("Error fetching user data:", error);
-          // if fetch fails insted of whole failure it will only set the user to the Firebase auth object
-          setUser(firebaseUser);
+          setUser(firebaseUser); // if fetch fails insted of whole failure it will only set the user to the Firebase auth object
         }
       } else {
-        // here if he logged out or not authenticated
-        setUser(null);
+        setUser(null); // here if he logged out or not authenticated
       }
       setLoading(false);
     });
 
-    // cleanup subscription on unmount
-    return unsubscribe;
+    
+    return unsubscribe; // cleanup subscription on unmount
   }, []);
 
   const signup = (email, password) => {
