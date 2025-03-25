@@ -7,15 +7,15 @@ import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
 import { AdminRoute, UserRoute } from './contexts/ProtectedRoute';
 
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
 import StudentImportRecordPage from './pages/StudnetPages/StudentImportRecordPage';
 import FillFormPage from './pages/StudnetPages/FillFormPage';
 import AdminHomePage from './pages/AdminPages/AdminHomePage';
+import LoadingPage from './pages/LoginPages/LoadingPage';
 
 const App = () => {
-  const isAuth = true;
-  const isStudent = true;
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -23,20 +23,18 @@ const App = () => {
         <Routes>
           <Route path="/*" element={<LoginPage />} />
           <Route path="/ForgetPassPage" element={<ForgetPassPage />} />
-
+          <Route path="/Loading" element={<LoadingPage />} />
 
           <Route path="/ProfileCompletionPage" element={
-            <UserRoute>
+            <UserRoute>  {/* here we are wrapping up the route to Protect it  */}
               <ProfileCompletionPage />
             </UserRoute>} />
 
           <Route path="/StudentImportRecordPage" element={
-            <UserRoute>
+            <UserRoute> {/* here we are wrapping up the route to Protect it  */}
               <StudentImportRecordPage />
             </UserRoute>
           } />
-
-
 
           <Route path="/FillFormPage" element={
             <UserRoute>
