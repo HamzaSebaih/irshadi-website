@@ -137,7 +137,7 @@ def login(*args, **kwargs):
             return jsonify(admin_doc.to_dict()), 200
 
         # Step 3: Check if UID exists in the 'students' collection
-        student_ref = db.collection('students').document(uid)
+        student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
 
         if student_doc.exists:

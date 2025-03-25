@@ -20,7 +20,7 @@ const LoginPage = () => {
 
     try {
       await login(email, password);
-      navigate('/StudentHomePage');
+      navigate('/loading');
     } catch (error) {
       setError('The Email address or Passwrod is wrong');
     }
@@ -40,7 +40,7 @@ const LoginPage = () => {
             navigate('/ProfileCompletionPage');
         } else {
             // console.log("Navigating to student home page");
-            navigate('/StudentHomePage');
+            navigate('/loading');
         }
         }
         else{
