@@ -7,20 +7,47 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 
-const AuthContext = createContext(); //Any component inside the AuthProvider will have access to this context.
+const AuthContext = createContext(); // any component inside the AuthProvider will have access to this context.
 
-export const useAuth = () => useContext(AuthContext); //this to make it easier to use the context 
+export const useAuth = () => useContext(AuthContext); // This makes it easier to use the context 
 
-export function AuthProvider({ children }) { 
+export function AuthProvider({ children }) {
+  const backendIp = "http://127.0.0.1:5000"; //this the ip domain for the backend
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken(); // get the Firebase auth token
+          const response = await fetch(`${backendIp}/login`, {  // fetch additional user data from the backend
+            method: "POST",
+            headers: {
+              "Authorization": `${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+
+          const respObj = await response.json();
+          setUser({ ...firebaseUser, ...respObj }); // here we append respObj to the Firebase user object
+
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          setUser(firebaseUser); // if fetch fails insted of whole failure it will only set the user to the Firebase auth object
+        }
+      } else {
+        setUser(null); // here if he logged out or not authenticated
+      }
       setLoading(false);
     });
-    return unsubscribe;
+
+    
+    return unsubscribe; // cleanup subscription on unmount
   }, []);
 
   const signup = (email, password) => {

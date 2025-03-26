@@ -137,7 +137,7 @@ def login(*args, **kwargs):
             return jsonify(admin_doc.to_dict()), 200
 
         # Step 3: Check if UID exists in the 'students' collection
-        student_ref = db.collection('students').document(uid)
+        student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
 
         if student_doc.exists:
@@ -145,6 +145,7 @@ def login(*args, **kwargs):
             # Add role to the student data and return doc
             student_data = student_doc.to_dict()
             student_data["role"] = "student"
+            print(student_data)
             return jsonify(student_data), 200
 
         # Step 4: If UID is not in either collection, create a new student
@@ -311,10 +312,6 @@ def delete_admin(decoded_token):
     except Exception as e:
         return jsonify({"error": "Failed to delete admin", "details": str(e)}), 500
 
-@app.route('/deleteadmin', methods=['POST'])
-@admin_required
-def delete_admin(decoded_token):
-    None
 
 @app.route('/addCourse', methods=['POST'])
 @admin_required

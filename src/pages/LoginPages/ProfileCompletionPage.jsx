@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential } from "firebase/auth";
+import { getAuth, onAuthStateChanged, EmailAuthProvider, linkWithCredential } from "firebase/auth";
 
 
 const ProfileCompletionPage = () => {
@@ -68,8 +68,8 @@ const ProfileCompletionPage = () => {
           // Link the credential to the current user account
           await linkWithCredential(user, credential);
 
-          // Navigate to home page after successful linking
-          navigate("/StudentHomePage");
+          // Navigate to loading page after successful linking
+          navigate("/loading");
         } else {
           throw new Error("No user is currently signed in");
         }

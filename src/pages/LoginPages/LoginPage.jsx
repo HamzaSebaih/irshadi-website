@@ -20,7 +20,7 @@ const LoginPage = () => {
 
     try {
       await login(email, password);
-      navigate('/StudentHomePage');
+      navigate('/loading');
     } catch (error) {
       setError('The Email address or Passwrod is wrong');
     }
@@ -30,21 +30,21 @@ const LoginPage = () => {
     try {
         const result = await signInWithPopup(auth, googleProvider);
 
-        console.log("Sign-in result:", result);
-        console.log("Is new user:", result.additionalUserInfo?.isNewUser);
+        // console.log("Sign-in result:", result);
+        // console.log("Is new user:", result.additionalUserInfo?.isNewUser);
 
         // Check if the email ends with "kau.edu.sa"
         if (result.user?.email?.endsWith("kau.edu.sa")) {
           if (result.additionalUserInfo?.isNewUser) {
-            console.log("Navigating to profile completion page");
+            // console.log("Navigating to profile completion page");
             navigate('/ProfileCompletionPage');
         } else {
-            console.log("Navigating to student home page");
-            navigate('/StudentHomePage');
+            // console.log("Navigating to student home page");
+            navigate('/loading');
         }
         }
         else{
-          setError("Please ensure to use you'r univerity account")
+          setError("Please ensure to use your univerity account")
         }
 
         

@@ -1,11 +1,10 @@
-import { useNavigate } from "react-router-dom"; // ✅ Correct import
-import StudentImportRecordPage from "./StudentImportRecordPage"; // ✅ Check if default export
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 
 const StudentHomePage = () => {
-    const studentName = "Ali Hamza";
-    const currentProgress = "X/40 hours";
-    const lastUpdate = "2025";
-    const navigate = useNavigate(); // ✅ Correct way to use navigation
+    const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
+
+    const navigate = useNavigate(); 
 
     return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
@@ -16,18 +15,17 @@ const StudentHomePage = () => {
                     <div className="space-y-8 text-xl">
                         <h3 className="text-2xl font-semibold text-gray-700">Current Student Info:</h3>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Name:</span> {studentName}
+                            <span className="font-medium text-gray-900">Name:</span> {user.name ?? "No Data"}
                         </p>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Current Progress:</span> {currentProgress}
+                            <span className="font-medium text-gray-900">Current Progress:</span> {user.hours.total ?? "No Data"}
                         </p>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Last Update of Academic Records:</span> {lastUpdate}
+                            <span className="font-medium text-gray-900">Last Update of Academic Records:</span> {user.lastUpdate ?? "No Data"}
                         </p>
                     </div>
                 </div>
 
-                {/* ✅ Correct button navigation */}
                 <div className="flex justify-center mt-10">
                     <button 
                         className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-8 px-28 text-xl rounded-lg transition" 
