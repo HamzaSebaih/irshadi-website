@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useExtraInfo } from './BackEndContext';
 
 export function UserRoute({ children }) { //this is general user Route In case if I need it I will add it here
   //however currently there is no use to it
@@ -14,13 +15,14 @@ export function UserRoute({ children }) { //this is general user Route In case i
 
 
 export function AdminRoute({ children }) { //this for admin route
+  const { extraInfo } = useExtraInfo();
   const { user } = useAuth();
 
   if (!user) {
     return <Navigate to="/login" />;
   }
 
-  if (user.role !== 'admin') {
+  if (extraInfo.role !== 'admin') {
     return <Navigate to="/unauthorized" />;
   }
 
@@ -30,12 +32,13 @@ export function AdminRoute({ children }) { //this for admin route
 
 export function StudentRoute({ children }) { //this for student route
   const { user } = useAuth();
+  const { extraInfo } = useExtraInfo();
 
   if (!user) {
     return <Navigate to="/login" />;
   }
 
-  if (user.role !== 'student') {
+  if (extraInfo.role !== 'student') {
     return <Navigate to="/unauthorized" />;
   }
 

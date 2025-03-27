@@ -5,6 +5,7 @@ import ProfileCompletionPage from './pages/LoginPages/ProfileCompletionPage'
 import StudentHomePage from './pages/StudnetPages/StudentHomePage';
 import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
+import { ExtraInfoProvider } from './contexts/BackEndContext';
 import { AdminRoute,StudentRoute } from './contexts/ProtectedRoute';
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -16,10 +17,10 @@ import LoadingPage from './pages/LoginPages/LoadingPage';
 import Unauthorized from './pages/LoginPages/Unauthorized';
 
 const App = () => {
-
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ExtraInfoProvider>
         <Nav />
         <Routes>
           <Route path="/*" element={<LoginPage />} />
@@ -66,6 +67,7 @@ const App = () => {
 
           {/*<Route path="*" element={<NotFound />} /> */}
         </Routes>
+        </ExtraInfoProvider>
       </AuthProvider>
     </BrowserRouter>
   );
