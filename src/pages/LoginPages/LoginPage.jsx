@@ -34,19 +34,19 @@ const LoginPage = () => {
         // console.log("Is new user:", result.additionalUserInfo?.isNewUser);
 
         // Check if the email ends with "kau.edu.sa"
-        if (result.user?.email?.endsWith("kau.edu.sa")) {
-          if (result.additionalUserInfo?.isNewUser) {
-            // console.log("Navigating to profile completion page");
-            navigate('/ProfileCompletionPage');
-        } else {
-            // console.log("Navigating to student home page");
-            navigate('/loading');
-        }
-        }
-        else{
-          setError("Please ensure to use your univerity account")
-        }
-
+        // if (result.user?.email?.endsWith("kau.edu.sa")) {
+        // }
+        if (result.additionalUserInfo?.isNewUser) {
+          // console.log("Navigating to profile completion page");
+          navigate('/ProfileCompletionPage');
+      } else {
+          // console.log("Navigating to student home page");
+          navigate('/loading');
+      }
+        // else{
+        //   setError("Please ensure to use your univerity account")
+        // }
+        
         
     } catch (error) {
         console.error("Google Login Error:", error);
