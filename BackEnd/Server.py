@@ -245,7 +245,7 @@ def add_admin(decoded_token):
         if admin_doc.exists:
             return jsonify({"error": "Email already belongs to an admin"}), 400
 
-        student_ref = db.collection('students').document(uid)
+        student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
         if student_doc.exists:
             # Retrieve name and email from the student document
@@ -312,26 +312,61 @@ def delete_admin(decoded_token):
     except Exception as e:
         return jsonify({"error": "Failed to delete admin", "details": str(e)}), 500
 
-
 @app.route('/addCourse', methods=['POST'])
 @admin_required
-def add_Course(decoded_token):#WIP Strucutre
-    #NOTE GOAL: adding a course to the courses collection
-    #KIND OF WIP since no Structure is specified, we just take json and put it as is, we don't check
+def add_course(decoded_token):
+    # NOTE GOAL: adding a course to the Courses collection
     try:
         # Get data from the request (e.g., JSON payload)
         data = request.json
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        course_code = data.get("course_code")
-        course_number = data.get("course_number")
-        DocumentName = course_code + "_" + course_number
-        # Add data to Firestore
-        db.collection('Courses').document(DocumentName).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
-        return jsonify({"message": "Data added successfully!"}), 201
+        # Step 1: Extract and validate required fields
+        department = data.get('department')
+        course_number = data.get('course_number')
+        course_name = data.get('course_name')
+        hours = data.get('hours')
+        prerequisites = data.get('prerequisites', [])  # Default to empty list if not provided
+
+        # Validate required fields
+        if not department or not isinstance(department, str):
+            return jsonify({"error": "Department is required and must be a string"}), 400
+        if course_number is None or not isinstance(course_number, (int, str)):
+            return jsonify({"error": "Course number is required and must be a number or string"}), 400
+        if not course_name or not isinstance(course_name, str):
+            return jsonify({"error": "Course name is required and must be a string"}), 400
+        if hours is None or not isinstance(hours, int):
+            return jsonify({"error": "Hours is required and must be an integer"}), 400
+        if not isinstance(prerequisites, list) or not all(isinstance(prereq, str) for prereq in prerequisites):
+            return jsonify({"error": "Prerequisites must be a list of strings"}), 400
+
+        # Convert course_number to string for the document ID
+        course_number_str = str(course_number)
+
+        # Step 2: Create a unique document ID (e.g., "CPIT-251")
+        course_id = f"{department}-{course_number_str}"
+
+        # Check if the course already exists
+        course_ref = db.collection('Courses').document(course_id)
+        if course_ref.get().exists:
+            return jsonify({"error": f"Course {course_id} already exists"}), 400
+
+        # Step 3: Create the course document
+        course_data = {
+            "department": department,
+            "course_number": int(course_number),  # Store as integer in Firestore
+            "course_name": course_name,
+            "hours": hours,
+            "prerequisites": prerequisites
+        }
+        course_ref.set(course_data)
+
+        # Step 4: Return success message
+        return jsonify({"message": f"Course {course_id} added successfully"}), 200
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Failed to add course", "details": str(e)}), 500
 
 @app.route('/delete/<user_id>', methods=['DELETE'])
 @admin_required
@@ -363,8 +398,31 @@ def add_Survey(decoded_token):#WIP Structure
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/getCourses', methods=['GET'])
+@admin_required
+def get_courses(decoded_token):
+    try:
+        # Step 1: Query the Courses collection to get all documents
+        courses_ref = db.collection('Courses')
+        courses_docs = courses_ref.stream()
 
+        # Step 2: Convert documents to a list of dictionaries
+        courses_list = []
+        for doc in courses_docs:
+            course_data = doc.to_dict()
+            # Add the document ID as the course ID (e.g., "CPIT-251")
+            course_data['course_id'] = doc.id
+            courses_list.append(course_data)
 
+        # Step 3: Check if the collection is empty
+        if not courses_list:
+            return jsonify({"message": "No courses found", "courses": []}), 200
+
+        # Step 4: Return the list of courses
+        return jsonify({"courses": courses_list}), 200
+
+    except Exception as e:
+        return jsonify({"error": "Failed to retrieve courses", "details": str(e)}), 500
 
 #End of Admin Functions Section _______________
 
@@ -481,10 +539,10 @@ def update_student_data(uid):
                         general_info['hours_completed'] = 0
                 elif key == 'ساعات المعدل':  # Total Hours
                     try:
-                        general_info['hours_total'] = int(value)
+                        general_info['gpa_hours'] = int(value)
                         print("Matched: Total Hours")
                     except ValueError:
-                        general_info['hours_total'] = 0
+                        general_info['gpa_hours'] = 0
                 elif key == 'الساعات المحولة':  # Exchanged Hours
                     try:
                         general_info['hours_exchanged'] = int(value)
@@ -522,13 +580,34 @@ def update_student_data(uid):
                     if hours_registered == hours_passed and grade not in ['F', 'W','DN']:
                         finished_courses.append(course_code)
 
+    # --- NEW SECTION: Extract equivalent courses from "المقررات المعادلة" table ---
+    equivalent_courses_table = None
+    for table in academic_tables:
+        prev_elem = table.find_previous('td', class_='pldefault')
+        if prev_elem and 'المقررات المعادلة' in prev_elem.text:
+            equivalent_courses_table = table
+            break
+
+    if equivalent_courses_table:
+        print("Found equivalent courses table, extracting courses...")
+        rows = equivalent_courses_table.find_all('tr')[1:]  # Skip header row
+        for row in rows:
+            cols = row.find_all('td', class_='dddefault')
+            if len(cols) >= 2:  # Ensure at least 2 columns for dept and course number
+                dept = cols[0].text.strip()
+                course_num = cols[1].text.strip()
+                course_code = f"{dept}-{course_num}"
+                if course_code not in finished_courses:  # Avoid duplicates
+                    finished_courses.append(course_code)
+    # --- END OF NEW SECTION ---
+
     # Structure extracted data
     extracted_data = {
         "Student_ID": general_info.get('Student_ID', ''),
         "hours": {
             "registered": general_info.get('hours_registered', 0),
             "completed": general_info.get('hours_completed', 0),
-            "total": general_info.get('hours_total', 0),
+            "gpa": general_info.get('gpa_hours', 0),
             "exchanged": general_info.get('hours_exchanged', 0)
         },
         "gpa": general_info.get('gpa', 0.0),
@@ -548,14 +627,15 @@ def update_student_data(uid):
         "Student_ID": extracted_data["Student_ID"],
         "hours": {
             "registered": extracted_data["hours"]["registered"],
-            "total": extracted_data["hours"]["total"],
+            "gpa": extracted_data["hours"]["gpa"],
             "exchanged": extracted_data["hours"]["exchanged"],
             "completed": extracted_data["hours"]["completed"]
         },
         "gpa": extracted_data["gpa"],
         "name": name_str,
         "major": extracted_data["major"],
-        "Finished_Courses": extracted_data["Finished_Courses"]
+        "Finished_Courses": extracted_data["Finished_Courses"],
+        "last_updated": datetime.now(timezone.utc)  # Records the current UTC time
     }
     
     student_document.set(updated_data, merge=True)
@@ -564,7 +644,6 @@ def update_student_data(uid):
     print("")
     print("Updated Firestore document with data:", updated_data)
     
-
 @app.route('/addResponse', methods=['POST'])
 @token_required
 def add_Response(decoded_token):#WIP, Response Structure WIP
