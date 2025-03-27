@@ -364,21 +364,6 @@ def add_Survey(decoded_token):#WIP Structure
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/addAdmin', methods=['POST'])
-@admin_required
-def add_Admin():
-    #GOAL: given an email, take the user associated and make him an admin
-    #by creating a file for him in the admins collection representing his account
-    #and deleting his old file if he was a previous student
-    #NOTE WIP
-    try:
-        
-        
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 
 
 #End of Admin Functions Section _______________
