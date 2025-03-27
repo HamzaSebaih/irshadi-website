@@ -23,7 +23,7 @@ load_dotenv() # Load environment variables (optional, for production)
 app = Flask(__name__)
 CORS(app) #this cors are used to fix the front end request however I read its bad for deployoment @AbdulazizJastanieh
 # Initialize Firestore
-cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsdk-fbsvc-9e96fac39e.json")  # this is the credentials that will be used to connect with the firestore
+cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsdk-fbsvc-d9b5b63d0d.json")  # this is the credentials that will be used to connect with the firestore
 firebase_admin.initialize_app(cred) #here we make a connection with firebase using our credentials, 
 db = firestore.client()  # This is your Firestore database object, here we create a connection to our firestore database, 
 
