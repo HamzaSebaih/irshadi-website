@@ -1,21 +1,23 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useExtraInfo } from '../../contexts/BackEndContext';
 //this page is used to load the user extra info before redirecting him to the home page
 const LoadingPage = () => {
+    const { extraInfo, loadingExtra } = useExtraInfo();
     const { user } = useAuth();
     const navigate = useNavigate();
-
-    if (user?.rule === "admin") {  //if he is an admin take him to admin home page
+    if(user){
+    if (extraInfo?.rule === "admin") {  //if he is an admin take him to admin home page
         navigate('/adminHomePage');
     }
-    else if(user){ //if he is not an admin then most likely or surely he is a student or future admin
+    else{ //if he is not an admin then most likely or surely he is a student or future admin
         //then take him to student home page
         navigate('/studentHomePage')
     }
+}
     else{ //in case if someone tried to go to student home page if not logged in
          navigate("/login")
     }
-
 
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
