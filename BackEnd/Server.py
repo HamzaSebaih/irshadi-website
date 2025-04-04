@@ -156,7 +156,7 @@ def login(*args, **kwargs):
             "hours": {
                 "registered": 0,
                 "completed": 0,
-                "total": 0,
+                "gpa": 0,
                 "exchanged": 0
             },
             "finishedCourses": [] 
@@ -323,9 +323,9 @@ def add_course(decoded_token):
             return jsonify({"error": "No data provided"}), 400
 
         # Step 1: Extract and validate required fields
-        department = data.get('department')
-        course_number = data.get('course_number')
-        course_name = data.get('course_name')
+        department = data.get('department')#CPIT
+        course_number = data.get('course_number')#470
+        course_name = data.get('course_name')#networks 2
         hours = data.get('hours')
         prerequisites = data.get('prerequisites', [])  # Default to empty list if not provided
 
