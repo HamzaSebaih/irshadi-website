@@ -19,6 +19,7 @@ const Nav = () => {
           {isAuth ? (
             <>
               {isAdmin ? (
+                <>
                 <li className="text-gray-300">
                                       <Link
                       to="/AdminHomePage"
@@ -27,6 +28,16 @@ const Nav = () => {
                       HomePage
                     </Link>
                 </li>
+                <li className="text-gray-300">
+                                      <Link
+                      to="/AdminStudyPlansPage"
+                      className="hover:text-gray-300 transition duration-300"
+                    >
+                      Study Plans
+                    </Link>
+                </li>
+
+                </>
               ) : (
                 <>
                   <li>

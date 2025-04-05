@@ -5,9 +5,11 @@
     //by doing this the search will be easier to handle so that every time I search it won't disappear
 
 import { useState, useEffect } from "react";
-
+import { useExtraInfo } from '../../contexts/BackEndContext';
 const FillFormPage = () => {
 
+    const { extraInfo } = useExtraInfo();
+    console.log(extraInfo.Finished_Courses)
     const available_courses = [ //we take this form the backend server so we might need to get api here or somewhere else to get this data
         { "CODE": "CPIT221", "level": 1, "prerequisites": [] },
         { "CODE": "CPIT250", "level": 4, "prerequisites": ["CPCS204"] },
