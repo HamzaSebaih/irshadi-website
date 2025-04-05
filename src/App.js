@@ -15,7 +15,8 @@ import FillFormPage from './pages/StudnetPages/FillFormPage';
 import AdminHomePage from './pages/AdminPages/AdminHomePage';
 import LoadingPage from './pages/LoginPages/LoadingPage';
 import Unauthorized from './pages/LoginPages/Unauthorized';
-
+import AdminStudyPlansPage from './pages/AdminPages/AdminStudyPlansPage';
+import PlanDetailsPage from './pages/AdminPages/PlanDetailsPage';
 const App = () => {
   return (
     <BrowserRouter>
@@ -65,7 +66,22 @@ const App = () => {
             </AdminRoute>
           } />
 
+          <Route path="/AdminStudyPlansPage" element={
+            <AdminRoute>
+              <AdminStudyPlansPage />
+              {/* here we are wrapping up the route to Protect it  */}
+            </AdminRoute>
+          } />
+
+          <Route path="/PlanDetailsPage" element={
+            <AdminRoute>
+              <PlanDetailsPage />
+              {/* here we are wrapping up the route to Protect it  */}
+            </AdminRoute>
+          } />
+
           {/*<Route path="*" element={<NotFound />} /> */}
+
         </Routes>
         </ExtraInfoProvider>
       </AuthProvider>

@@ -51,7 +51,7 @@ def admin_required(f):
         #now grab his uid , check if his file is in the admins collection
         #if it exists, it means he is an admin
         user_id = decoded_token["uid"]
-        user_ref = db.collection('Admins').document(user_id)
+        user_ref = db.collection('admins').document(user_id)
         user = user_ref.get()
         if (not user.exists):
             return jsonify({"error": "Admin access required"}), 403
@@ -120,7 +120,7 @@ def login(*args, **kwargs):
                 "email": email,
                 "role": "admin"  # 
             }
-            # Create the admin document
+            # Create the admin document 
             db.collection('admins').document(uid).set(admin_data)
             # Delete the pending admin "file"
             pending_admin_ref.delete()
@@ -133,8 +133,10 @@ def login(*args, **kwargs):
 
         if admin_doc.exists:
             # User is an existing admin
-            # Return the admin document directly 
-            return jsonify(admin_doc.to_dict()), 200
+            # Return the admin document directly
+            admin_data = admin_doc.to_dict()
+            admin_data["role"] ="admin"
+            return jsonify(admin_data), 200
 
         # Step 3: Check if UID exists in the 'students' collection
         student_ref = db.collection('Students').document(uid)
