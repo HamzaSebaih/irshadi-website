@@ -505,28 +505,38 @@ def get_courses(decoded_token):
 
 @app.route('/addPlan', methods=['POST'])
 @admin_required
-def add_plan(decoded_token): 
+def add_plan(decoded_token):
     """
     Creates a new plan document in the 'Plans' collection using the plan name as the key.
+    Requires admin privileges.
+    Expects JSON: {"plan_name": "PLAN_NAME", "levels": NUMBER_OF_LEVELS}
+    Initializes the plan with a 'levels' map containing empty lists for each numbered level
+    (e.g., "Level 1": [], "Level 2": [], ...) AND an additional "Extra" level.
     """
     try:
         # --- 1. Get and Validate Input ---
         data = request.get_json()
-        if not data or 'plan_name' not in data:
-            return jsonify({"error": "Missing 'plan_name' in request body"}), 400
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
 
-        plan_name = data['plan_name']
+        plan_name = data.get('plan_name')
+        num_levels = data.get('levels') # Get the number of levels
 
         # Basic validation for plan_name
-        if not isinstance(plan_name, str) or not plan_name.strip():
-             return jsonify({"error": "'plan_name' must be a non-empty string"}), 400
+        if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
+            return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
+
+        # Validation for levels
+        if num_levels is None:
+             return jsonify({"error": "Missing 'levels' attribute in request body"}), 400
+        if not isinstance(num_levels, int) or num_levels <= 0:
+             return jsonify({"error": "'levels' must be a positive integer"}), 400
 
         # Use stripped name as the document ID
         plan_name = plan_name.strip()
 
         # --- 2. Check for Existing Plan ---
         # Reference the document using the plan name as the ID in the 'Plans' collection
-        # NOTE: Using 'Plans' collection name as specified in the requirements.
         plan_ref = db.collection('Plans').document(plan_name)
 
         # Check if a document with this ID already exists
@@ -534,14 +544,22 @@ def add_plan(decoded_token):
             # Return 409 Conflict if the plan name is already taken
             return jsonify({"error": f"Plan '{plan_name}' already exists"}), 409
 
-        # --- 3. Create New Plan Document ---
+        # --- 3. Create New Plan Document with Levels + Extra ---
         # Prepare the data for the new document
         plan_data = {
-            # Using 'last_update_date' field name as requested,
-            # setting its initial value to the current UTC time.
-            'last_update_date': datetime.now(timezone.utc)
-            # You could add other fields here if needed in the future, e.g., 'created_by': decoded_token['uid']
+            'last_update_date': datetime.now(timezone.utc),
+            'levels': {} # Initialize the map field for levels
+            # You could add other fields here if needed, e.g., 'created_by': decoded_token['uid']
         }
+
+        # Populate the levels map based on the num_levels input
+        for i in range(1, num_levels + 1):
+            level_key = f"Level {i}" # Create keys like "Level 1", "Level 2", etc.
+            plan_data['levels'][level_key] = [] # Add each level with an empty list
+
+        # --- Add the 'Extra' level AFTER the numbered levels ---
+        plan_data['levels']['Extra'] = []
+        # --- End of modification ---
 
         # Set the data in Firestore, creating the document
         plan_ref.set(plan_data)
@@ -549,7 +567,7 @@ def add_plan(decoded_token):
         # --- 4. Return Success Response ---
         # Return 201 Created status code for successful resource creation
         return jsonify({
-            "message": f"Plan '{plan_name}' created successfully",
+            "message": f"Plan '{plan_name}' created successfully with {num_levels} numbered levels and an 'Extra' level initialized.",
             "plan_id": plan_name # Optionally return the ID
             }), 201
 
@@ -565,7 +583,8 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
     """
     Adds a new level (as an empty list attribute) to an existing plan document in the 'Plans' collection.
     Requires admin privileges.
-    Expects a JSON body like: {"plan_name": "My Existing Plan", "level_name": "Level 1"}
+    Expects a JSON body like: {"plan_name": "My Existing Plan", "level_number": 1}
+    Constructs the Firestore key as "Level {level_number}".
     Updates the 'last_update_date' field of the plan.
     """
     try:
@@ -575,17 +594,21 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
              return jsonify({"error": "Missing JSON request body"}), 400
 
         plan_name = data.get('plan_name')
-        level_name = data.get('level_name') # Can be a name like "Level 1" or a number as string "100"
+        level_number = data.get('level_number') # Expecting a number for the level
 
-        # Basic validation
+        # Basic validation for plan_name
         if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
             return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
-        if not level_name or not isinstance(level_name, str) or not level_name.strip():
-             # Ensure level_name is treated as a string key, even if it looks numeric
-            return jsonify({"error": "Missing or invalid 'level_name' (must be a non-empty string)"}), 400
+
+        # Validation for level_number (must be a positive integer)
+        if level_number is None:
+             return jsonify({"error": "Missing 'level_number' attribute in request body"}), 400
+        if not isinstance(level_number, int) or level_number <= 0:
+             return jsonify({"error": "'level_number' must be a positive integer"}), 400
 
         plan_name = plan_name.strip()
-        level_name = level_name.strip() # Use stripped names
+        # Construct the key name (e.g., "Level 1", "Level 2") from the number
+        level_key = f"Level {level_number}"
 
         # --- 2. Check if Plan Exists ---
         plan_ref = db.collection('Plans').document(plan_name)
@@ -594,15 +617,17 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
         if not plan_doc.exists:
             return jsonify({"error": f"Plan '{plan_name}' not found"}), 404 # 404 Not Found
 
-        # --- 3. Check if Level Already Exists ---
+        # --- 3. Check if Level Key Already Exists ---
         plan_data = plan_doc.to_dict()
-        if level_name in plan_data:
-            return jsonify({"error": f"Level '{level_name}' already exists in plan '{plan_name}'"}), 409 # 409 Conflict
+        # Check using the constructed key (e.g., "Level 1")
+        if level_key in plan_data.get('levels', {}): # Check within the 'levels' map
+            return jsonify({"error": f"Level '{level_key}' already exists in plan '{plan_name}'"}), 409 # 409 Conflict
 
-        # --- 4. Add New Level and Update Timestamp ---
-        # Prepare the data to update: new level as empty list and updated timestamp
+        # --- 4. Add New Level Key and Update Timestamp ---
+        # Prepare the data to update: new level key within the 'levels' map
+        # Use dot notation for updating nested fields
         update_data = {
-            level_name: [], # Add the new level field with an empty list value
+            f'levels.{level_key}': [], # Add the new level field within the 'levels' map
             'last_update_date': datetime.now(timezone.utc) # Update the timestamp
         }
 
@@ -611,22 +636,22 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
 
         # --- 5. Return Success Response ---
         return jsonify({
-            "message": f"Level '{level_name}' added successfully to plan '{plan_name}'"
+            "message": f"Level '{level_key}' added successfully to plan '{plan_name}'"
             }), 200 # 200 OK for successful update
 
     except Exception as e:
         # Log the error for server-side debugging
-        print(f"Error in /addPlanLevel for plan '{plan_name if 'plan_name' in locals() else 'unknown'}', level '{level_name if 'level_name' in locals() else 'unknown'}': {e}")
+        print(f"Error in /addPlanLevel for plan '{plan_name if 'plan_name' in locals() else 'unknown'}', level number '{level_number if 'level_number' in locals() else 'unknown'}': {e}")
         # Return a generic server error message
         return jsonify({"error": "Failed to add plan level due to an internal server error", "details": str(e)}), 500
 
 @app.route('/addCourseToPlanLevel', methods=['POST'])
 @admin_required
-def add_course_to_plan_level(decoded_token): # The admin_required decorator injects decoded_token 
+def add_course_to_plan_level(decoded_token): # The admin_required decorator injects decoded_token
     """
-    Adds a course ID to the array associated with a specific level within a plan document.
+    Adds a course ID to the array associated with a specific level within a plan document's 'levels' map.
     Requires admin privileges.
-    Expects JSON: {"plan_name": "PlanName", "level_name": "LevelName", "course_id": "COURSE-ID"}
+    Expects JSON: {"plan_name": "PlanName", "level_identifier": LEVEL_NUMBER | "Extra", "course_id": "COURSE-ID"}
     Updates the 'last_update_date' field of the plan.
     Uses ArrayUnion for safe addition (won't add duplicates).
     """
@@ -636,29 +661,38 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
 
-        plan_name = data.get('plan_name')#plan file name
-        level_name = data.get('level_name')# Should be the same name of the level name in the plan document
+        plan_name = data.get('plan_name')#it
+        # Renamed input field to accept number or "Extra"
+        level_identifier = data.get('level_identifier')# 4
         course_id = data.get('course_id') # e.g., "CPIT-251"
 
-        # Basic validation
+        # Basic validation for plan_name and course_id
         if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
             return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
-        if not level_name or not isinstance(level_name, str) or not level_name.strip():
-            return jsonify({"error": "Missing or invalid 'level_name' (must be a non-empty string)"}), 400
         if not course_id or not isinstance(course_id, str) or not course_id.strip():
             return jsonify({"error": "Missing or invalid 'course_id' (must be a non-empty string)"}), 400
 
         plan_name = plan_name.strip()
-        level_name = level_name.strip()
-        course_id = course_id.strip()#stripping just cleanes white spaces
+        course_id = course_id.strip()
+
+        # --- Validate level_identifier and construct level_key ---
+        level_key = None
+        if isinstance(level_identifier, int) and level_identifier > 0:
+            # If it's a positive integer, construct key like "Level 1"
+            level_key = f"Level {level_identifier}"
+        elif isinstance(level_identifier, str) and level_identifier.strip().lower() == "extra":
+            # If it's the string "Extra" (case-insensitive check, store consistently)
+            level_key = "Extra"
+        else:
+            # Otherwise, the identifier is invalid
+            return jsonify({"error": "'level_identifier' must be a positive integer or the string 'Extra'"}), 400
 
         # --- 2. Check if Course Exists ---
-        # NOTE: Assumes 'Courses' is the correct collection name for courses.
         course_ref = db.collection('Courses').document(course_id)
         if not course_ref.get().exists:
              return jsonify({"error": f"Course '{course_id}' not found in Courses collection"}), 404 # Or 400 Bad Request
 
-        # --- 3. Check if Plan and Level Exist ---
+        # --- 3. Check if Plan and Level Key Exist ---
         plan_ref = db.collection('Plans').document(plan_name)
         plan_doc = plan_ref.get()
 
@@ -666,18 +700,20 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
             return jsonify({"error": f"Plan '{plan_name}' not found"}), 404
 
         plan_data = plan_doc.to_dict()
-        if level_name not in plan_data:
-            return jsonify({"error": f"Level '{level_name}' does not exist in plan '{plan_name}'. Create it first."}), 404 # Or 400
+        # Check if the 'levels' map exists and if the specific level_key exists within it
+        levels_map = plan_data.get('levels', {})
+        if level_key not in levels_map:
+            return jsonify({"error": f"Level '{level_key}' does not exist in plan '{plan_name}'. Create it first."}), 404 # Or 400
 
         # Optional: Check if the level is actually an array/list
-        if not isinstance(plan_data.get(level_name), list):
-             return jsonify({"error": f"Target field '{level_name}' in plan '{plan_name}' is not an array/list."}), 400
+        if not isinstance(levels_map.get(level_key), list):
+             return jsonify({"error": f"Target field for level '{level_key}' in plan '{plan_name}' is not an array/list."}), 400
 
         # --- 4. Add Course ID to Level Array ---
         # Prepare update data using ArrayUnion and update timestamp
+        # Use dot notation to target the specific level key within the 'levels' map
         update_data = {
-            # firestore.ArrayUnion safely adds the course_id only if it's not already present
-            level_name: firestore.ArrayUnion([course_id]),
+            f'levels.{level_key}': firestore.ArrayUnion([course_id]),
             'last_update_date': datetime.now(timezone.utc)
         }
 
@@ -685,17 +721,55 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         plan_ref.update(update_data)
 
         # --- 5. Return Success Response ---
-        # Note: Even if the course was already in the array, ArrayUnion succeeds without error.
-        # You might want to check the array size before/after if you need to know if an actual change occurred.
         return jsonify({
-            "message": f"Course '{course_id}' added to level '{level_name}' in plan '{plan_name}' (or was already present)."
+            "message": f"Course '{course_id}' added to level '{level_key}' in plan '{plan_name}' (or was already present)."
             }), 200 # 200 OK
 
     except Exception as e:
         # Log the error for server-side debugging
-        print(f"Error in /addCourseToPlanLevel for plan '{plan_name if 'plan_name' in locals() else 'unknown'}', level '{level_name if 'level_name' in locals() else 'unknown'}', course '{course_id if 'course_id' in locals() else 'unknown'}': {e}")
+        print(f"Error in /addCourseToPlanLevel for plan '{plan_name if 'plan_name' in locals() else 'unknown'}', level_identifier '{level_identifier if 'level_identifier' in locals() else 'unknown'}', course '{course_id if 'course_id' in locals() else 'unknown'}': {e}")
         # Return a generic server error message
         return jsonify({"error": "Failed to add course to plan level due to an internal server error", "details": str(e)}), 500
+
+@app.route('/getPlans', methods=['GET'])
+@admin_required # 
+def get_plans(decoded_token): # token_required provides decoded_token
+    """
+    Retrieves a list of all available plans from the 'Plans' collection.
+    Requires user authentication.
+    Returns a JSON list containing each plan's ID and its data.
+    """
+    try:
+        # --- 1. Query the Plans Collection ---
+        # Get an iterator for all documents in the 'Plans' collection
+        plans_ref = db.collection('Plans')
+        plans_stream = plans_ref.stream()
+
+        # --- 2. Format the Plans Data ---
+        plans_list = []
+        for doc in plans_stream:
+            # Get the document ID (which is the plan name/ID)
+            plan_id = doc.id
+            # Get the document data (contains 'last_update_date', 'levels' map)
+            plan_data = doc.to_dict()
+
+            # Combine ID and data into a single dictionary for the list
+            plan_entry = {
+                "plan_id": plan_id,
+                **plan_data # Unpack the document data into the main dictionary
+                # Alternatively, nest data: "data": plan_data
+            }
+            plans_list.append(plan_entry)
+
+        # --- 3. Return the Response ---
+        # Return the list of plans, even if it's empty
+        return jsonify({"plans": plans_list}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /getPlans: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve plans due to an internal server error", "details": str(e)}), 500
 
 
 #End of Admin Functions Section _______________
