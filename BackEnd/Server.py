@@ -326,7 +326,7 @@ def add_course(decoded_token):
         department = data.get('department')#CPIT
         course_number = data.get('course_number')#470
         course_name = data.get('course_name')#networks 2
-        hours = data.get('hours')
+        hours = data.get('hours')# 3
         prerequisites = data.get('prerequisites', [])  # Default to empty list if not provided
 
         # Validate required fields
@@ -367,6 +367,85 @@ def add_course(decoded_token):
 
     except Exception as e:
         return jsonify({"error": "Failed to add course", "details": str(e)}), 500
+
+@app.route('/addCoursePre', methods=['POST'])
+@admin_required
+def add_course_prerequisite(decoded_token): # The admin_required decorator injects decoded_token
+    """
+    Adds a prerequisite course ID to the 'prerequisites' array of a target course document
+    within the 'Courses' collection.
+    Requires admin privileges.
+    Expects JSON: {"course_id": "TARGET-COURSE-ID", "prerequisite": "PREREQ-COURSE-ID"}
+    Uses ArrayUnion for safe addition (won't add duplicates).
+    Verifies that both the target course and the prerequisite course exist.
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        course_id = data.get('course_id')         # The course to add the prerequisite to
+        prerequisite_id = data.get('prerequisite') # The course ID that is the prerequisite
+
+        # Basic validation
+        if not course_id or not isinstance(course_id, str) or not course_id.strip():
+            return jsonify({"error": "Missing or invalid 'course_id' (must be a non-empty string)"}), 400
+        if not prerequisite_id or not isinstance(prerequisite_id, str) or not prerequisite_id.strip():
+            return jsonify({"error": "Missing or invalid 'prerequisite' (must be a non-empty string)"}), 400
+
+        course_id = course_id.strip()
+        prerequisite_id = prerequisite_id.strip()
+
+        # Prevent a course from being its own prerequisite
+        if course_id == prerequisite_id:
+             return jsonify({"error": "A course cannot be a prerequisite of itself"}), 400
+
+        # --- 2. Verify Both Courses Exist ---
+        # NOTE: Assumes 'Courses' is the correct collection name.
+        course_ref = db.collection('Courses').document(course_id)
+        prereq_ref = db.collection('Courses').document(prerequisite_id)
+
+        course_doc = course_ref.get()
+        prereq_doc = prereq_ref.get() # Check if prerequisite course also exists
+
+        if not course_doc.exists:
+             return jsonify({"error": f"Target course '{course_id}' not found in Courses collection"}), 404
+        if not prereq_doc.exists:
+             # It's important that prerequisites refer to actual courses
+             return jsonify({"error": f"Prerequisite course '{prerequisite_id}' not found in Courses collection"}), 400 # 400 Bad Request as the input refers to a non-existent entity
+
+        # --- 3. Check Target Course's 'prerequisites' Field (Optional but Recommended) ---
+        course_data = course_doc.to_dict()
+        # Check if the field exists and if it's a list before attempting ArrayUnion
+        # ArrayUnion *might* create the field if it doesn't exist, but explicit checks are safer.
+        if 'prerequisites' in course_data and not isinstance(course_data.get('prerequisites'), list):
+             return jsonify({"error": f"Field 'prerequisites' in course '{course_id}' exists but is not an array/list."}), 409 # 409 Conflict - field type mismatch
+
+        # --- 4. Add Prerequisite using ArrayUnion ---
+        # Prepare the update data. ArrayUnion will handle adding the prerequisite_id
+        # only if it's not already present in the 'prerequisites' array.
+        # It will also create the 'prerequisites' field if it doesn't exist yet.
+        update_data = {
+            'prerequisites': firestore.ArrayUnion([prerequisite_id])
+            # Optional: You might want to update a 'last_modified' timestamp here as well
+            # 'last_modified': datetime.now(timezone.utc)
+        }
+
+        # Update the target course document
+        course_ref.update(update_data)
+
+        # --- 5. Return Success Response ---
+        # Note: ArrayUnion succeeds even if the item was already present.
+        return jsonify({
+            "message": f"Prerequisite '{prerequisite_id}' added to course '{course_id}' (or was already present)."
+            }), 200 # 200 OK
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /addCoursePre for course '{course_id if 'course_id' in locals() else 'unknown'}', prerequisite '{prerequisite_id if 'prerequisite_id' in locals() else 'unknown'}': {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to add course prerequisite due to an internal server error", "details": str(e)}), 500
 
 @app.route('/delete/<user_id>', methods=['DELETE'])
 @admin_required
@@ -423,6 +502,201 @@ def get_courses(decoded_token):
 
     except Exception as e:
         return jsonify({"error": "Failed to retrieve courses", "details": str(e)}), 500
+
+@app.route('/addPlan', methods=['POST'])
+@admin_required
+def add_plan(decoded_token): 
+    """
+    Creates a new plan document in the 'Plans' collection using the plan name as the key.
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data or 'plan_name' not in data:
+            return jsonify({"error": "Missing 'plan_name' in request body"}), 400
+
+        plan_name = data['plan_name']
+
+        # Basic validation for plan_name
+        if not isinstance(plan_name, str) or not plan_name.strip():
+             return jsonify({"error": "'plan_name' must be a non-empty string"}), 400
+
+        # Use stripped name as the document ID
+        plan_name = plan_name.strip()
+
+        # --- 2. Check for Existing Plan ---
+        # Reference the document using the plan name as the ID in the 'Plans' collection
+        # NOTE: Using 'Plans' collection name as specified in the requirements.
+        plan_ref = db.collection('Plans').document(plan_name)
+
+        # Check if a document with this ID already exists
+        if plan_ref.get().exists:
+            # Return 409 Conflict if the plan name is already taken
+            return jsonify({"error": f"Plan '{plan_name}' already exists"}), 409
+
+        # --- 3. Create New Plan Document ---
+        # Prepare the data for the new document
+        plan_data = {
+            # Using 'last_update_date' field name as requested,
+            # setting its initial value to the current UTC time.
+            'last_update_date': datetime.now(timezone.utc)
+            # You could add other fields here if needed in the future, e.g., 'created_by': decoded_token['uid']
+        }
+
+        # Set the data in Firestore, creating the document
+        plan_ref.set(plan_data)
+
+        # --- 4. Return Success Response ---
+        # Return 201 Created status code for successful resource creation
+        return jsonify({
+            "message": f"Plan '{plan_name}' created successfully",
+            "plan_id": plan_name # Optionally return the ID
+            }), 201
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /addPlan for plan '{plan_name if 'plan_name' in locals() else 'unknown'}': {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to add plan due to an internal server error", "details": str(e)}), 500
+
+@app.route('/addPlanLevel', methods=['POST'])
+@admin_required
+def add_plan_level(decoded_token): # The admin_required decorator injects decoded_token
+    """
+    Adds a new level (as an empty list attribute) to an existing plan document in the 'Plans' collection.
+    Requires admin privileges.
+    Expects a JSON body like: {"plan_name": "My Existing Plan", "level_name": "Level 1"}
+    Updates the 'last_update_date' field of the plan.
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        plan_name = data.get('plan_name')
+        level_name = data.get('level_name') # Can be a name like "Level 1" or a number as string "100"
+
+        # Basic validation
+        if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
+            return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
+        if not level_name or not isinstance(level_name, str) or not level_name.strip():
+             # Ensure level_name is treated as a string key, even if it looks numeric
+            return jsonify({"error": "Missing or invalid 'level_name' (must be a non-empty string)"}), 400
+
+        plan_name = plan_name.strip()
+        level_name = level_name.strip() # Use stripped names
+
+        # --- 2. Check if Plan Exists ---
+        plan_ref = db.collection('Plans').document(plan_name)
+        plan_doc = plan_ref.get()
+
+        if not plan_doc.exists:
+            return jsonify({"error": f"Plan '{plan_name}' not found"}), 404 # 404 Not Found
+
+        # --- 3. Check if Level Already Exists ---
+        plan_data = plan_doc.to_dict()
+        if level_name in plan_data:
+            return jsonify({"error": f"Level '{level_name}' already exists in plan '{plan_name}'"}), 409 # 409 Conflict
+
+        # --- 4. Add New Level and Update Timestamp ---
+        # Prepare the data to update: new level as empty list and updated timestamp
+        update_data = {
+            level_name: [], # Add the new level field with an empty list value
+            'last_update_date': datetime.now(timezone.utc) # Update the timestamp
+        }
+
+        # Update the document in Firestore
+        plan_ref.update(update_data)
+
+        # --- 5. Return Success Response ---
+        return jsonify({
+            "message": f"Level '{level_name}' added successfully to plan '{plan_name}'"
+            }), 200 # 200 OK for successful update
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /addPlanLevel for plan '{plan_name if 'plan_name' in locals() else 'unknown'}', level '{level_name if 'level_name' in locals() else 'unknown'}': {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to add plan level due to an internal server error", "details": str(e)}), 500
+
+@app.route('/addCourseToPlanLevel', methods=['POST'])
+@admin_required
+def add_course_to_plan_level(decoded_token): # The admin_required decorator injects decoded_token 
+    """
+    Adds a course ID to the array associated with a specific level within a plan document.
+    Requires admin privileges.
+    Expects JSON: {"plan_name": "PlanName", "level_name": "LevelName", "course_id": "COURSE-ID"}
+    Updates the 'last_update_date' field of the plan.
+    Uses ArrayUnion for safe addition (won't add duplicates).
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        plan_name = data.get('plan_name')#plan file name
+        level_name = data.get('level_name')# Should be the same name of the level name in the plan document
+        course_id = data.get('course_id') # e.g., "CPIT-251"
+
+        # Basic validation
+        if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
+            return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
+        if not level_name or not isinstance(level_name, str) or not level_name.strip():
+            return jsonify({"error": "Missing or invalid 'level_name' (must be a non-empty string)"}), 400
+        if not course_id or not isinstance(course_id, str) or not course_id.strip():
+            return jsonify({"error": "Missing or invalid 'course_id' (must be a non-empty string)"}), 400
+
+        plan_name = plan_name.strip()
+        level_name = level_name.strip()
+        course_id = course_id.strip()#stripping just cleanes white spaces
+
+        # --- 2. Check if Course Exists ---
+        # NOTE: Assumes 'Courses' is the correct collection name for courses.
+        course_ref = db.collection('Courses').document(course_id)
+        if not course_ref.get().exists:
+             return jsonify({"error": f"Course '{course_id}' not found in Courses collection"}), 404 # Or 400 Bad Request
+
+        # --- 3. Check if Plan and Level Exist ---
+        plan_ref = db.collection('Plans').document(plan_name)
+        plan_doc = plan_ref.get()
+
+        if not plan_doc.exists:
+            return jsonify({"error": f"Plan '{plan_name}' not found"}), 404
+
+        plan_data = plan_doc.to_dict()
+        if level_name not in plan_data:
+            return jsonify({"error": f"Level '{level_name}' does not exist in plan '{plan_name}'. Create it first."}), 404 # Or 400
+
+        # Optional: Check if the level is actually an array/list
+        if not isinstance(plan_data.get(level_name), list):
+             return jsonify({"error": f"Target field '{level_name}' in plan '{plan_name}' is not an array/list."}), 400
+
+        # --- 4. Add Course ID to Level Array ---
+        # Prepare update data using ArrayUnion and update timestamp
+        update_data = {
+            # firestore.ArrayUnion safely adds the course_id only if it's not already present
+            level_name: firestore.ArrayUnion([course_id]),
+            'last_update_date': datetime.now(timezone.utc)
+        }
+
+        # Update the document in Firestore
+        plan_ref.update(update_data)
+
+        # --- 5. Return Success Response ---
+        # Note: Even if the course was already in the array, ArrayUnion succeeds without error.
+        # You might want to check the array size before/after if you need to know if an actual change occurred.
+        return jsonify({
+            "message": f"Course '{course_id}' added to level '{level_name}' in plan '{plan_name}' (or was already present)."
+            }), 200 # 200 OK
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /addCourseToPlanLevel for plan '{plan_name if 'plan_name' in locals() else 'unknown'}', level '{level_name if 'level_name' in locals() else 'unknown'}', course '{course_id if 'course_id' in locals() else 'unknown'}': {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to add course to plan level due to an internal server error", "details": str(e)}), 500
+
 
 #End of Admin Functions Section _______________
 
