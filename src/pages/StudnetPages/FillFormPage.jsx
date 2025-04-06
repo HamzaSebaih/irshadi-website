@@ -30,7 +30,8 @@ const FillFormPage = () => {
             // filter available courses that are not in finished_courses
             .filter(e => !finished_courses.some(finished => finished.CODE === e.CODE))
             .map(e => ({ ...e, isChecked: false }));
-
+            //if @AbdulazizJastanieh did the logic in the back end I will edit it here
+            //TODO 
         set_show_courses(show_courses_temp);
         set_filtered_courses(show_courses_temp); //this makes sure we have a copy for filtering
     }, []); // empty dependency array makes it run only on mount
