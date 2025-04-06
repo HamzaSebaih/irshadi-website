@@ -529,9 +529,11 @@ def add_plan(decoded_token):
             return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
 
         # Validation for levels
+
         if num_levels is None:
              return jsonify({"error": "Missing 'levels' attribute in request body"}), 400
         if not isinstance(num_levels, int) or num_levels <= 0:
+             print(num_levels)
              return jsonify({"error": "'levels' must be a positive integer"}), 400
 
         # Use stripped name as the document ID
@@ -548,10 +550,11 @@ def add_plan(decoded_token):
 
         # --- 3. Create New Plan Document with Levels + Extra ---
         # Prepare the data for the new document
+        last_updated_date = datetime.now(timezone.utc)
         plan_data = {
-            'last_update_date': datetime.now(timezone.utc),
+            'last_update_date':last_updated_date,
             'levels': {} # Initialize the map field for levels
-            # You could add other fields here if needed, e.g., 'created_by': decoded_token['uid']
+
         }
 
         # Populate the levels map based on the num_levels input
@@ -570,7 +573,9 @@ def add_plan(decoded_token):
         # Return 201 Created status code for successful resource creation
         return jsonify({
             "message": f"Plan '{plan_name}' created successfully with {num_levels} numbered levels and an 'Extra' level initialized.",
-            "plan_id": plan_name # Optionally return the ID
+            "plan_name": plan_name # we will return the plan name and other info
+            ,"plan_levels": num_levels
+            ,"last_updated_date": last_updated_date
             }), 201
 
     except Exception as e:

@@ -17,6 +17,7 @@ import LoadingPage from './pages/LoginPages/LoadingPage';
 import Unauthorized from './pages/LoginPages/Unauthorized';
 import AdminStudyPlansPage from './pages/AdminPages/AdminStudyPlansPage';
 import PlanDetailsPage from './pages/AdminPages/PlanDetailsPage';
+
 const App = () => {
   return (
     <BrowserRouter>
@@ -73,7 +74,7 @@ const App = () => {
             </AdminRoute>
           } />
 
-          <Route path="/PlanDetailsPage" element={
+          <Route path="/editPlan" element={
             <AdminRoute>
               <PlanDetailsPage />
               {/* here we are wrapping up the route to Protect it  */}
