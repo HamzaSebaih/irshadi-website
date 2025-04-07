@@ -6,7 +6,7 @@ import StudentHomePage from './pages/StudnetPages/StudentHomePage';
 import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
 import { ExtraInfoProvider } from './contexts/BackEndContext';
-import { AdminRoute,StudentRoute } from './contexts/ProtectedRoute';
+import { AdminRoute,StudentRoute,UserRoute } from './contexts/ProtectedRoute';
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
@@ -25,7 +25,11 @@ const App = () => {
         <ExtraInfoProvider>
         <Nav />
         <Routes>
-          <Route path="/*" element={<LoginPage />} />
+          <Route path="/*" element={
+            <UserRoute> {/*here we are wrapping this so that if a user is logged in he can't be in login page also we might change * WIP */}
+            <LoginPage />
+            </UserRoute>
+            } />
           <Route path="/ForgetPassPage" element={<ForgetPassPage />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/Loading" element={<LoadingPage />} />
