@@ -38,7 +38,8 @@ const LoginPage = () => {
         // }
         if (result.additionalUserInfo?.isNewUser) {
           // console.log("Navigating to profile completion page");
-          navigate('/ProfileCompletionPage');
+          // navigate('/ProfileCompletionPage');
+          navigate('/loading');
       } else {
           // console.log("Navigating to student home page");
           navigate('/loading');
@@ -132,7 +133,7 @@ const LoginPage = () => {
               type="submit"
               className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200"
             >
-              Register Account
+              Login
             </button>
 
             <div className="relative flex items-center justify-center">

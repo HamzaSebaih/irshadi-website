@@ -6,8 +6,8 @@ export function UserRoute({ children }) { //this is general user Route In case i
   //however currently there is no use to it
   const { user } = useAuth();
 
-  if (!user) {
-    return <Navigate to="/login" />;
+  if (user) {
+    return <Navigate to="/loading" />;
   }
 
   return children;
