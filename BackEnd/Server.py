@@ -778,6 +778,253 @@ def get_plans(decoded_token): # token_required provides decoded_token
         # Return a generic server error message
         return jsonify({"error": "Failed to retrieve plans due to an internal server error", "details": str(e)}), 500
 
+@app.route('/addForm', methods=['POST'])
+@admin_required
+def add_form(decoded_token): # admin_required provides decoded_token
+    """
+    Adds a new form document to the 'Forms' collection with a sequential numeric ID.
+    Requires admin privileges.
+    Expects JSON: {"title": "...", "description": "...", "start_date": "YYYY-MM-DD",
+                   "end_date": "YYYY-MM-DD", "plan": "PLAN_ID"}
+    Initializes an empty 'Form_Responses' list.
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        required_fields = ["title", "description", "start_date", "end_date", "plan"]
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        title = data.get('title')
+        description = data.get('description')
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')
+        plan_id = data.get('plan') # ID of the plan associated with this form
+
+        # Basic type validation
+        if not all(isinstance(data.get(field), str) for field in ["title", "description", "start_date", "end_date", "plan"]):
+             return jsonify({"error": "Fields 'title', 'description', 'start_date', 'end_date', 'plan' must be strings"}), 400
+
+        # Validate date strings and convert to datetime objects (assuming YYYY-MM-DD format)
+        try:
+            # Combine date with minimum time for Timestamp conversion
+            start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d")
+            # Optional: Set time to end of day for end_date
+            # end_datetime = end_datetime.replace(hour=23, minute=59, second=59)
+
+            if end_datetime < start_datetime:
+                 return jsonify({"error": "'end_date' cannot be before 'start_date'"}), 400
+
+            # Convert to Firestore Timestamps (UTC is recommended)
+            start_timestamp = datetime.combine(start_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
+            end_timestamp = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc) # Or use end_datetime if time is set
+
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD"}), 400
+
+        # Check if the associated plan exists
+        plan_ref = db.collection('Plans').document(plan_id)
+        if not plan_ref.get().exists:
+             return jsonify({"error": f"Associated plan '{plan_id}' not found"}), 404 # Or 400
+
+        # --- 2. Generate Sequential ID ---
+        # WARNING: This method can be inefficient and prone to race conditions under high load.
+        # Consider Firestore auto-generated IDs or a dedicated counter document for robustness.
+        forms_ref = db.collection('Forms')
+        forms_stream = forms_ref.stream()
+        max_id = 0
+        for doc in forms_stream:
+            try:
+                # Attempt to convert document ID to integer
+                doc_id_int = int(doc.id)
+                if doc_id_int > max_id:
+                    max_id = doc_id_int
+            except ValueError:
+                # Ignore documents with non-integer IDs if any exist
+                continue
+
+        new_form_id = max_id + 1
+        new_form_id_str = str(new_form_id) # Use the string representation as the document ID
+
+        # --- 3. Prepare Form Data ---
+        form_data = {
+            "title": title,
+            "description": description,
+            "start_date": start_timestamp, # Store as Timestamp
+            "end_date": end_timestamp,     # Store as Timestamp
+            "plan_id": plan_id,
+            "Form_Responses": [], # Initialize empty list for responses
+            "created_at": datetime.now(timezone.utc) # Add creation timestamp
+        }
+
+        # --- 4. Create New Form Document ---
+        form_doc_ref = forms_ref.document(new_form_id_str)
+        # Optional: Use a transaction here if strict sequential ID guarantee is needed
+        # to prevent race conditions where two requests might calculate the same next ID.
+        form_doc_ref.set(form_data)
+
+        # --- 5. Return Success Response ---
+        return jsonify({
+            "message": "Form created successfully",
+            "form_id": new_form_id_str
+        }), 201 # 201 Created
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /addForm: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to add form due to an internal server error", "details": str(e)}), 500
+
+@app.route('/getForms', methods=['GET'])
+@admin_required # Assuming any logged-in user can view the list of forms
+def get_forms(decoded_token): # token_required provides decoded_token
+    """
+    Retrieves a list of all available forms from the 'Forms' collection.
+    Requires user authentication.
+    Returns a JSON list containing each form's ID and its data,
+    EXCLUDING the 'Form_Responses' field.
+    """
+    try:
+        # --- 1. Query the Forms Collection ---
+        forms_ref = db.collection('Forms')
+        forms_stream = forms_ref.stream() # Get an iterator for all form documents
+
+        # --- 2. Format the Forms Data (excluding responses) ---
+        forms_list = []
+        for doc in forms_stream:
+            # Get the document ID (e.g., "1", "2", "3"...)
+            form_id = doc.id
+            # Get the document data dictionary
+            form_data = doc.to_dict()
+
+            # --- Exclude the 'Form_Responses' field ---
+            # Use pop() which removes the key if it exists, and does nothing if it doesn't
+            form_data.pop('Form_Responses', None)
+            # --- End of exclusion ---
+
+            # Combine the form ID and the modified data
+            form_entry = {
+                "form_id": form_id,
+                **form_data # Unpack the rest of the form data
+            }
+            forms_list.append(form_entry)
+
+        # --- 3. Return the Response ---
+        # Return the list of forms (without responses), even if it's empty
+        return jsonify({"forms": forms_list}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /getForms: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve forms due to an internal server error", "details": str(e)}), 500
+
+
+@app.route('/editForm', methods=['PATCH']) # Using PATCH for partial updates
+@admin_required
+def edit_form(decoded_token): # admin_required provides decoded_token
+    """
+    Updates specific fields (title, description, start_date, end_date) of an existing form.
+    Requires admin privileges.
+    Expects JSON containing 'form_id' and at least one field to update:
+    {"form_id": "FORM_ID", "title": "New Title", "end_date": "YYYY-MM-DD", ...}
+    Only updates the fields provided in the request.
+    Adds a 'last_modified' timestamp.
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        form_id = data.get('form_id')
+
+        # Validate form_id
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' (must be a non-empty string)"}), 400
+        form_id = form_id.strip()
+
+        # --- 2. Check if Form Exists ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+        if not form_doc.exists:
+             return jsonify({"error": f"Form with ID '{form_id}' not found"}), 404
+
+        # --- 3. Prepare Update Data ---
+        update_data = {}
+        allowed_fields = ["title", "description", "start_date", "end_date"]
+        found_update = False
+
+        # Process optional fields
+        if 'title' in data:
+            title = data['title']
+            if not isinstance(title, str) or not title.strip():
+                 return jsonify({"error": "Invalid 'title' (must be a non-empty string)"}), 400
+            update_data['title'] = title.strip()
+            found_update = True
+
+        if 'description' in data:
+            description = data['description']
+            if not isinstance(description, str): # Allow empty description? Assuming yes.
+                 return jsonify({"error": "Invalid 'description' (must be a string)"}), 400
+            update_data['description'] = description
+            found_update = True
+
+        if 'start_date' in data:
+            start_date_str = data['start_date']
+            if not isinstance(start_date_str, str):
+                 return jsonify({"error": "Invalid 'start_date' (must be a string)"}), 400
+            try:
+                start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d")
+                update_data['start_date'] = datetime.combine(start_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
+                found_update = True
+            except ValueError:
+                return jsonify({"error": "Invalid 'start_date' format. Please use YYYY-MM-DD"}), 400
+
+        if 'end_date' in data:
+            end_date_str = data['end_date']
+            if not isinstance(end_date_str, str):
+                 return jsonify({"error": "Invalid 'end_date' (must be a string)"}), 400
+            try:
+                end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d")
+                update_data['end_date'] = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
+                found_update = True
+            except ValueError:
+                return jsonify({"error": "Invalid 'end_date' format. Please use YYYY-MM-DD"}), 400
+
+        # Optional: Add cross-validation for dates if both are provided
+        # E.g., check if update_data['end_date'] < update_data['start_date']
+
+        # Check if any valid fields were provided for update
+        if not found_update:
+            return jsonify({"error": "No valid fields provided for update. Allowed fields: title, description, start_date, end_date"}), 400
+
+        # Add a timestamp for the modification
+        update_data['last_modified'] = datetime.now(timezone.utc)
+
+        # --- 4. Perform Update ---
+        form_ref.update(update_data)
+
+        # --- 5. Return Success Response ---
+        return jsonify({"message": f"Form '{form_id}' updated successfully"}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /editForm for form_id '{form_id if 'form_id' in locals() else 'unknown'}': {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to edit form due to an internal server error", "details": str(e)}), 500
+
+def get_form_statistics(decoded_token):
+    #this will show the form statistics, 
+    None
+
+
+
 
 #End of Admin Functions Section _______________
 
@@ -828,29 +1075,33 @@ def handle_extension_update():
         return jsonify({"error": "An unexpected error occurred: " + str(e)}), 500
 
 def update_student_data(uid):
-    # This function doesn't have a route, and its used through the function: 
-    #handle_extension_update
-    #NOTE Goal: Update the student document with info from the HTML request sent by the extension
-    
+    """
+    Parses HTML from the request, extracts student academic info,
+    maps the major to English, and updates the student document in Firestore.
+    Called by handle_extension_update.
+    """
+    MAJOR_MAPPING = {
+        "تقنية المعلومات": "IT",
+        "نظم المعلومات": "IS",
+        "علوم الحاسبات": "CS"
+    }
+
     # Access the HTML from the Flask request body
     html = request.data.decode('utf-8')
     if not html:
         raise ValueError("No HTML provided")
-    
-    
+
     # Reference to the student document in Firestore
-    # Goal: Update the student document with info from an HTML file
-    
-    # Reference to the student document in Firestore
+    # NOTE: Collection name 'Students' kept as is.
     student_document = db.collection('Students').document(uid)
-    
+
     # Parse HTML
     soup = BeautifulSoup(html, 'html.parser')
-    
+
     # General info extraction
     general_info = {}
-    
-    # Find the academic info table
+
+    # Find the academic info table (using original logic)
     academic_tables = soup.find_all('table', class_='datadisplaytable', attrs={'border': '1', 'width': '800'})
     academic_table = None
     for table in academic_tables:
@@ -859,67 +1110,38 @@ def update_student_data(uid):
             academic_table = table
             break
 
-    # Assuming academic_table is the BeautifulSoup object for the academic info table
     if academic_table:
         print("Academic table found, extracting rows...")
         rows = academic_table.find_all('tr')
         for row in rows:
-            # Find all th and td elements in the row
             ths = row.find_all('th', class_='ddheader')
             tds = row.find_all('td', class_='dddefault')
-            # Pair each th with its corresponding td
             for i in range(len(ths)):
                 key = ths[i].text.strip()
                 value = tds[i].text.strip()
                 print(f"Extracted: Key='{key}', Value='{value}'")
-                
-                # Matching logic for each key
-                if key == 'رقم الطالب':  # Student ID
-                    general_info['Student_ID'] = value
-                    print("Matched: Student ID")
-                elif key == 'التخصص':  # Major
-                    general_info['major'] = value
-                    print("Matched: Major")
-                elif key == 'الساعات المسجلة':  # Registered Hours
-                    try:
-                        general_info['hours_registered'] = int(value)
-                        print("Matched: Registered Hours")
-                    except ValueError:
-                        general_info['hours_registered'] = 0
-                elif key == 'الساعات المجتازة':  # Completed Hours
-                    try:
-                        general_info['hours_completed'] = int(value)
-                        print("Matched: Completed Hours")
-                    except ValueError:
-                        general_info['hours_completed'] = 0
-                elif key == 'ساعات المعدل':  # Total Hours
-                    try:
-                        general_info['gpa_hours'] = int(value)
-                        print("Matched: Total Hours")
-                    except ValueError:
-                        general_info['gpa_hours'] = 0
-                elif key == 'الساعات المحولة':  # Exchanged Hours
-                    try:
-                        general_info['hours_exchanged'] = int(value)
-                        print("Matched: Exchanged Hours")
-                    except ValueError:
-                        general_info['hours_exchanged'] = 0
-                elif key == 'المعدل':  # GPA
-                    try:
-                        general_info['gpa'] = float(value)
-                        print("Matched: GPA")
-                    except ValueError:
-                        general_info['gpa'] = 0.0
-    else:
-        print("Error: Academic table not found")
 
-    # Extract finished courses from transcript tables
+                # Matching logic for each key (simplified for brevity, use original logic)
+                if key == 'رقم الطالب': general_info['Student_ID'] = value
+                elif key == 'التخصص': general_info['major'] = value # Keep original Arabic here
+                elif key == 'الساعات المسجلة': general_info['hours_registered'] = int(value) if value.isdigit() else 0
+                elif key == 'الساعات المجتازة': general_info['hours_completed'] = int(value) if value.isdigit() else 0
+                elif key == 'ساعات المعدل': general_info['gpa_hours'] = int(value) if value.isdigit() else 0
+                elif key == 'الساعات المحولة': general_info['hours_exchanged'] = int(value) if value.isdigit() else 0
+                elif key == 'المعدل':
+                    try: general_info['gpa'] = float(value)
+                    except ValueError: general_info['gpa'] = 0.0
+    else:
+        print("Warning: Academic table not found") # Changed to warning
+
+    # Extract finished courses (using original logic)
     finished_courses = []
+    # ...(original logic for parsing transcript tables)...
     for table in academic_tables:
         headers = [th.text.strip() for th in table.find_all('th', class_='ddheader')]
         if 'مسجلة' in headers and 'مجتازة' in headers and 'التقدير' in headers:
             print("Found transcript table, extracting courses...")
-            rows = table.find_all('tr')[1:]  # Skip header row
+            rows = table.find_all('tr')[1:]
             for row in rows:
                 cols = row.find_all('td', class_='dddefault')
                 if len(cols) >= 7:
@@ -929,34 +1151,42 @@ def update_student_data(uid):
                     try:
                         hours_registered = int(cols[3].text.strip())
                         hours_passed = int(cols[4].text.strip())
-                    except ValueError:
-                        continue
+                    except ValueError: continue
                     grade = cols[6].text.strip()
-                    if hours_registered == hours_passed and grade not in ['F', 'W','DN']:
-                        finished_courses.append(course_code)
+                    if hours_registered > 0 and hours_registered == hours_passed and grade not in ['F', 'W','DN']:
+                         if course_code not in finished_courses:
+                              finished_courses.append(course_code)
 
-    # --- NEW SECTION: Extract equivalent courses from "المقررات المعادلة" table ---
+
+    # Extract equivalent courses (using original logic)
+    # ...(original logic for parsing equivalent courses table)...
     equivalent_courses_table = None
     for table in academic_tables:
         prev_elem = table.find_previous('td', class_='pldefault')
         if prev_elem and 'المقررات المعادلة' in prev_elem.text:
             equivalent_courses_table = table
             break
-
     if equivalent_courses_table:
         print("Found equivalent courses table, extracting courses...")
-        rows = equivalent_courses_table.find_all('tr')[1:]  # Skip header row
+        rows = equivalent_courses_table.find_all('tr')[1:]
         for row in rows:
             cols = row.find_all('td', class_='dddefault')
-            if len(cols) >= 2:  # Ensure at least 2 columns for dept and course number
+            if len(cols) >= 2:
                 dept = cols[0].text.strip()
                 course_num = cols[1].text.strip()
                 course_code = f"{dept}-{course_num}"
-                if course_code not in finished_courses:  # Avoid duplicates
+                if course_code not in finished_courses:
                     finished_courses.append(course_code)
-    # --- END OF NEW SECTION ---
 
-    # Structure extracted data
+
+    # --- Apply Major Mapping ---
+    arabic_major = general_info.get("major", "") # Get extracted Arabic major
+    # Look up in mapping, default to original Arabic name if no mapping found
+    english_major = MAJOR_MAPPING.get(arabic_major, arabic_major)
+    print(f"Mapping major: '{arabic_major}' -> '{english_major}'")
+    # --- End Mapping ---
+
+    # Structure extracted data (using original structure)
     extracted_data = {
         "Student_ID": general_info.get('Student_ID', ''),
         "hours": {
@@ -966,39 +1196,36 @@ def update_student_data(uid):
             "exchanged": general_info.get('hours_exchanged', 0)
         },
         "gpa": general_info.get('gpa', 0.0),
-        "major": general_info.get('major', ''),
+        # "major": arabic_major, # Store the mapped version below instead
         "Finished_Courses": finished_courses
     }
-    
+
     # Update Firestore document
     doc = student_document.get()
     if not doc.exists:
         raise ValueError("Student not found")
-    
-    existing_data = doc.to_dict()
-    name_str = existing_data.get("name", "")
 
+    existing_data = doc.to_dict()
+    name_str = existing_data.get("name", "") # Preserve existing name
+
+    # Prepare final update data
     updated_data = {
         "Student_ID": extracted_data["Student_ID"],
-        "hours": {
-            "registered": extracted_data["hours"]["registered"],
-            "gpa": extracted_data["hours"]["gpa"],
-            "exchanged": extracted_data["hours"]["exchanged"],
-            "completed": extracted_data["hours"]["completed"]
-        },
+        "hours": extracted_data["hours"],
         "gpa": extracted_data["gpa"],
-        "name": name_str,
-        "major": extracted_data["major"],
+        "name": name_str, # Keep existing name
+        "major": english_major, # Use the mapped English major name
         "Finished_Courses": extracted_data["Finished_Courses"],
         "last_updated": datetime.now(timezone.utc)  # Records the current UTC time
     }
-    
+
+    # Use set with merge=True to update existing fields and add new ones
     student_document.set(updated_data, merge=True)
-    
-    print("Extracted Data:", extracted_data)
+
+    print("Extracted Data (before mapping major):", extracted_data)
     print("")
     print("Updated Firestore document with data:", updated_data)
-    
+
 @app.route('/addResponse', methods=['POST'])
 @token_required
 def add_Response(decoded_token):#WIP, Response Structure WIP
@@ -1010,6 +1237,97 @@ def add_Response(decoded_token):#WIP, Response Structure WIP
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/getMyForms', methods=['GET'])
+@token_required # Ensures only logged-in users (students/admins) can call this
+def get_my_forms(decoded_token): # token_required provides decoded_token
+    """
+    Retrieves a list of forms relevant to the calling student's major.
+    Requires user authentication.
+    Filters forms based on matching the student's 'major' field with the form's 'plan_id'.
+    Returns a JSON list containing each matching form's ID and its data,
+    EXCLUDING the 'Form_Responses' field.
+    """
+    try:
+        # --- 1. Get Student's UID and Major ---
+        uid = decoded_token.get('uid')
+        if not uid:
+             # This shouldn't happen if token_required works correctly, but good practice
+             return jsonify({"error": "UID not found in token"}), 400
+
+        # Fetch the student's document
+        # NOTE: Assuming 'Students' is the correct collection name
+        student_ref = db.collection('Students').document(uid)
+        student_doc = student_ref.get()
+
+        if not student_doc.exists:
+             # Handle case where user exists in Auth but not in Students collection
+             # Or if an admin tries to call this endpoint
+             return jsonify({"error": "Student profile not found"}), 404
+
+        student_data = student_doc.to_dict()
+        # Get the student's major (assuming it's stored in English, e.g., "IT")
+        student_major = student_data.get('major')
+
+        if not student_major:
+             # Handle case where student exists but has no major assigned
+             print(f"Warning: Student {uid} has no major assigned.")
+             # Return empty list as no forms can match
+             return jsonify({"forms": []}), 200
+
+        # --- 2. Query All Forms ---
+        forms_ref = db.collection('Forms')
+        forms_stream = forms_ref.stream()
+
+        # --- 3. Filter Forms by Major and Format Data ---
+        relevant_forms_list = []
+        for doc in forms_stream:
+            form_id = doc.id
+            form_data = doc.to_dict()
+
+            # Get the plan_id associated with the form
+            form_plan_id = form_data.get('plan_id')
+
+            # --- Check if the form's plan_id matches the student's major ---
+            if form_plan_id == student_major:
+                # If it matches, exclude responses and add to the list
+                form_data.pop('Form_Responses', None) # Exclude responses
+
+                form_entry = {
+                    "form_id": form_id,
+                    **form_data # Unpack the rest of the form data
+                }
+                relevant_forms_list.append(form_entry)
+            # --- End of check ---
+
+        # --- 4. Return the Response ---
+        # Return the filtered list of forms
+        return jsonify({"forms": relevant_forms_list}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        uid_local = decoded_token.get('uid', 'unknown') # Get uid for logging if available
+        print(f"Error in /getMyForms for user {uid_local}: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve student forms due to an internal server error", "details": str(e)}), 500
+
+
+def get_form_courses(decoded_token):
+    #this will return the courses that the form contains which students can select from
+    #but the courses returned will be : 1-only courses that the student hasn't taken yet.
+    #2- courses will have a true or false value with them to indicate whether this course 
+    #is recommended for the student or not so he doesn't graduate late based off of the plan levels and 
+    #prerequisetes of courses
+    None
+
+def add_form_response(decoded_token):
+    #here we will add the student response to the form file. the response will have all the courses 
+    #he wants to study 
+    None
+
+def edit_form_response(decoded_token):
+    #the student can change his response for the given form.
+    #maybe just add the functionality to the add form response and make it edit 
+    None    
 
 #End Students Functions Section _______________
 

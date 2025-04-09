@@ -6,20 +6,32 @@ cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsd
 initialize_app(cred)
 db = firestore.client()
 
-def update_student_data(uid, html_file_path):
-    # Goal: Update the student document with info from an HTML file
+def update_student_data(uid):
+    # This function doesn't have a route, and its used through the function: 
+    #handle_extension_update
+    #NOTE Goal: Update the student document with info from the HTML request sent by the extension
+
+        # --- Mapping Dictionary for Majors ---
+    # Add more Arabic-to-English mappings here as needed
+    MAJOR_MAPPING = {
+        "تقنية المعلومات": "IT",
+        "نظم المعلومات": "IS",
+        "علوم الحاسبات": "CS"
+    }
+    # --- End Mapping Dictionary ---
+
     
-    # Read HTML from the specified file
-    try:
-        with open(html_file_path, 'r', encoding='utf-8') as file:
-            html = file.read()
-    except FileNotFoundError:
-        raise ValueError(f"HTML file not found at {html_file_path}")
-    except Exception as e:
-        raise ValueError(f"Error reading HTML file: {str(e)}")
-    
+
+
+
+    # Access the HTML from the Flask request body
+    html = request.data.decode('utf-8')
     if not html:
-        raise ValueError("HTML content is empty")
+        raise ValueError("No HTML provided")
+    
+    
+    # Reference to the student document in Firestore
+    # Goal: Update the student document with info from an HTML file
     
     # Reference to the student document in Firestore
     student_document = db.collection('Students').document(uid)
@@ -74,10 +86,10 @@ def update_student_data(uid, html_file_path):
                         general_info['hours_completed'] = 0
                 elif key == 'ساعات المعدل':  # Total Hours
                     try:
-                        general_info['hours_total'] = int(value)
+                        general_info['gpa_hours'] = int(value)
                         print("Matched: Total Hours")
                     except ValueError:
-                        general_info['hours_total'] = 0
+                        general_info['gpa_hours'] = 0
                 elif key == 'الساعات المحولة':  # Exchanged Hours
                     try:
                         general_info['hours_exchanged'] = int(value)
@@ -112,8 +124,29 @@ def update_student_data(uid, html_file_path):
                     except ValueError:
                         continue
                     grade = cols[6].text.strip()
-                    if hours_registered == hours_passed and grade not in ['F', 'W']:
+                    if hours_registered == hours_passed and grade not in ['F', 'W','DN']:
                         finished_courses.append(course_code)
+
+    # --- NEW SECTION: Extract equivalent courses from "المقررات المعادلة" table ---
+    equivalent_courses_table = None
+    for table in academic_tables:
+        prev_elem = table.find_previous('td', class_='pldefault')
+        if prev_elem and 'المقررات المعادلة' in prev_elem.text:
+            equivalent_courses_table = table
+            break
+
+    if equivalent_courses_table:
+        print("Found equivalent courses table, extracting courses...")
+        rows = equivalent_courses_table.find_all('tr')[1:]  # Skip header row
+        for row in rows:
+            cols = row.find_all('td', class_='dddefault')
+            if len(cols) >= 2:  # Ensure at least 2 columns for dept and course number
+                dept = cols[0].text.strip()
+                course_num = cols[1].text.strip()
+                course_code = f"{dept}-{course_num}"
+                if course_code not in finished_courses:  # Avoid duplicates
+                    finished_courses.append(course_code)
+    # --- END OF NEW SECTION ---
 
     # Structure extracted data
     extracted_data = {
@@ -121,13 +154,14 @@ def update_student_data(uid, html_file_path):
         "hours": {
             "registered": general_info.get('hours_registered', 0),
             "completed": general_info.get('hours_completed', 0),
-            "total": general_info.get('hours_total', 0),
+            "gpa": general_info.get('gpa_hours', 0),
             "exchanged": general_info.get('hours_exchanged', 0)
         },
         "gpa": general_info.get('gpa', 0.0),
         "major": general_info.get('major', ''),
         "Finished_Courses": finished_courses
     }
+    
     
     # Update Firestore document
     doc = student_document.get()
@@ -141,14 +175,15 @@ def update_student_data(uid, html_file_path):
         "Student_ID": extracted_data["Student_ID"],
         "hours": {
             "registered": extracted_data["hours"]["registered"],
-            "total": extracted_data["hours"]["total"],
+            "gpa": extracted_data["hours"]["gpa"],
             "exchanged": extracted_data["hours"]["exchanged"],
             "completed": extracted_data["hours"]["completed"]
         },
         "gpa": extracted_data["gpa"],
         "name": name_str,
         "major": extracted_data["major"],
-        "Finished_Courses": extracted_data["Finished_Courses"]
+        "Finished_Courses": extracted_data["Finished_Courses"],
+        "last_updated": datetime.now(timezone.utc)  # Records the current UTC time
     }
     
     student_document.set(updated_data, merge=True)
@@ -156,15 +191,4 @@ def update_student_data(uid, html_file_path):
     print("Extracted Data:", extracted_data)
     print("")
     print("Updated Firestore document with data:", updated_data)
-
-if __name__ == "__main__":
-    try:
-        update_student_data(
-            "qLvKbegvGjVmIudNqn6I2EfEGbH2",
-            r"C:\MyFiles\Second_Desktop\university\current semester\CPIT-499\CPIT-499-Website\irshadi-website\BackEnd\OtherFiles\studentinfoexample.html"
-        )
-        print("Update completed successfully!")
-    except ValueError as e:
-        print(f"Error: {str(e)}")
-    except Exception as e:
-        print(f"Unexpected error: {str(e)}")
+    
