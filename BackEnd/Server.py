@@ -778,6 +778,267 @@ def get_plans(decoded_token): # token_required provides decoded_token
         # Return a generic server error message
         return jsonify({"error": "Failed to retrieve plans due to an internal server error", "details": str(e)}), 500
 
+@app.route('/addForm', methods=['POST'])
+@admin_required
+def add_form(decoded_token): # admin_required provides decoded_token
+    """
+    Adds a new form document to the 'Forms' collection with a sequential numeric ID.
+    Requires admin privileges.
+    Expects JSON: {"title": "...", "description": "...", "start_date": "YYYY-MM-DD",
+                   "end_date": "YYYY-MM-DD", "plan": "PLAN_ID"}
+    Initializes an empty 'Form_Responses' list.
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        required_fields = ["title", "description", "start_date", "end_date", "plan"]
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        title = data.get('title')
+        description = data.get('description')
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')
+        plan_id = data.get('plan') # ID of the plan associated with this form
+
+        # Basic type validation
+        if not all(isinstance(data.get(field), str) for field in ["title", "description", "start_date", "end_date", "plan"]):
+             return jsonify({"error": "Fields 'title', 'description', 'start_date', 'end_date', 'plan' must be strings"}), 400
+
+        # Validate date strings and convert to datetime objects (assuming YYYY-MM-DD format)
+        try:
+            # Combine date with minimum time for Timestamp conversion
+            start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d")
+            # Optional: Set time to end of day for end_date
+            # end_datetime = end_datetime.replace(hour=23, minute=59, second=59)
+
+            if end_datetime < start_datetime:
+                 return jsonify({"error": "'end_date' cannot be before 'start_date'"}), 400
+
+            # Convert to Firestore Timestamps (UTC is recommended)
+            start_timestamp = datetime.combine(start_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
+            end_timestamp = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc) # Or use end_datetime if time is set
+
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD"}), 400
+
+        # Check if the associated plan exists
+        plan_ref = db.collection('Plans').document(plan_id)
+        if not plan_ref.get().exists:
+             return jsonify({"error": f"Associated plan '{plan_id}' not found"}), 404 # Or 400
+
+        # --- 2. Generate Sequential ID ---
+        # WARNING: This method can be inefficient and prone to race conditions under high load.
+        # Consider Firestore auto-generated IDs or a dedicated counter document for robustness.
+        forms_ref = db.collection('Forms')
+        forms_stream = forms_ref.stream()
+        max_id = 0
+        for doc in forms_stream:
+            try:
+                # Attempt to convert document ID to integer
+                doc_id_int = int(doc.id)
+                if doc_id_int > max_id:
+                    max_id = doc_id_int
+            except ValueError:
+                # Ignore documents with non-integer IDs if any exist
+                continue
+
+        new_form_id = max_id + 1
+        new_form_id_str = str(new_form_id) # Use the string representation as the document ID
+
+        # --- 3. Prepare Form Data ---
+        form_data = {
+            "title": title,
+            "description": description,
+            "start_date": start_timestamp, # Store as Timestamp
+            "end_date": end_timestamp,     # Store as Timestamp
+            "plan_id": plan_id,
+            "Form_Responses": [], # Initialize empty list for responses
+            "created_at": datetime.now(timezone.utc) # Add creation timestamp
+        }
+
+        # --- 4. Create New Form Document ---
+        form_doc_ref = forms_ref.document(new_form_id_str)
+        # Optional: Use a transaction here if strict sequential ID guarantee is needed
+        # to prevent race conditions where two requests might calculate the same next ID.
+        form_doc_ref.set(form_data)
+
+        # --- 5. Return Success Response ---
+        return jsonify({
+            "message": "Form created successfully",
+            "form_id": new_form_id_str
+        }), 201 # 201 Created
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /addForm: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to add form due to an internal server error", "details": str(e)}), 500
+
+@app.route('/getForms', methods=['GET'])
+@token_required # Assuming any logged-in user can view the list of forms
+def get_forms(decoded_token): # token_required provides decoded_token
+    """
+    Retrieves a list of all available forms from the 'Forms' collection.
+    Requires user authentication.
+    Returns a JSON list containing each form's ID and its data,
+    EXCLUDING the 'Form_Responses' field.
+    """
+    try:
+        # --- 1. Query the Forms Collection ---
+        forms_ref = db.collection('Forms')
+        forms_stream = forms_ref.stream() # Get an iterator for all form documents
+
+        # --- 2. Format the Forms Data (excluding responses) ---
+        forms_list = []
+        for doc in forms_stream:
+            # Get the document ID (e.g., "1", "2", "3"...)
+            form_id = doc.id
+            # Get the document data dictionary
+            form_data = doc.to_dict()
+
+            # --- Exclude the 'Form_Responses' field ---
+            # Use pop() which removes the key if it exists, and does nothing if it doesn't
+            form_data.pop('Form_Responses', None)
+            # --- End of exclusion ---
+
+            # Combine the form ID and the modified data
+            form_entry = {
+                "form_id": form_id,
+                **form_data # Unpack the rest of the form data
+            }
+            forms_list.append(form_entry)
+
+        # --- 3. Return the Response ---
+        # Return the list of forms (without responses), even if it's empty
+        return jsonify({"forms": forms_list}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /getForms: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve forms due to an internal server error", "details": str(e)}), 500
+
+@app.route('/editForm', methods=['PATCH']) # Using PATCH for partial updates
+@admin_required
+def edit_form(decoded_token): # admin_required provides decoded_token
+    """
+    Updates specific fields (title, description, start_date, end_date) of an existing form.
+    Requires admin privileges.
+    Expects JSON containing 'form_id' and at least one field to update:
+    {"form_id": "FORM_ID", "title": "New Title", "end_date": "YYYY-MM-DD", ...}
+    Only updates the fields provided in the request.
+    Adds a 'last_modified' timestamp.
+    """
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        form_id = data.get('form_id')
+
+        # Validate form_id
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' (must be a non-empty string)"}), 400
+        form_id = form_id.strip()
+
+        # --- 2. Check if Form Exists ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+        if not form_doc.exists:
+             return jsonify({"error": f"Form with ID '{form_id}' not found"}), 404
+
+        # --- 3. Prepare Update Data ---
+        update_data = {}
+        allowed_fields = ["title", "description", "start_date", "end_date"]
+        found_update = False
+
+        # Process optional fields
+        if 'title' in data:
+            title = data['title']
+            if not isinstance(title, str) or not title.strip():
+                 return jsonify({"error": "Invalid 'title' (must be a non-empty string)"}), 400
+            update_data['title'] = title.strip()
+            found_update = True
+
+        if 'description' in data:
+            description = data['description']
+            if not isinstance(description, str): # Allow empty description? Assuming yes.
+                 return jsonify({"error": "Invalid 'description' (must be a string)"}), 400
+            update_data['description'] = description
+            found_update = True
+
+        if 'start_date' in data:
+            start_date_str = data['start_date']
+            if not isinstance(start_date_str, str):
+                 return jsonify({"error": "Invalid 'start_date' (must be a string)"}), 400
+            try:
+                start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d")
+                update_data['start_date'] = datetime.combine(start_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
+                found_update = True
+            except ValueError:
+                return jsonify({"error": "Invalid 'start_date' format. Please use YYYY-MM-DD"}), 400
+
+        if 'end_date' in data:
+            end_date_str = data['end_date']
+            if not isinstance(end_date_str, str):
+                 return jsonify({"error": "Invalid 'end_date' (must be a string)"}), 400
+            try:
+                end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d")
+                update_data['end_date'] = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
+                found_update = True
+            except ValueError:
+                return jsonify({"error": "Invalid 'end_date' format. Please use YYYY-MM-DD"}), 400
+
+        # Optional: Add cross-validation for dates if both are provided
+        # E.g., check if update_data['end_date'] < update_data['start_date']
+
+        # Check if any valid fields were provided for update
+        if not found_update:
+            return jsonify({"error": "No valid fields provided for update. Allowed fields: title, description, start_date, end_date"}), 400
+
+        # Add a timestamp for the modification
+        update_data['last_modified'] = datetime.now(timezone.utc)
+
+        # --- 4. Perform Update ---
+        form_ref.update(update_data)
+
+        # --- 5. Return Success Response ---
+        return jsonify({"message": f"Form '{form_id}' updated successfully"}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        print(f"Error in /editForm for form_id '{form_id if 'form_id' in locals() else 'unknown'}': {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to edit form due to an internal server error", "details": str(e)}), 500
+
+def get_form_statistics(decoded_token):
+    #this will show the form statistics, 
+    None
+
+def get_form_courses(decoded_token):
+    #this will return the courses that the form contains which students can select from
+    #but the courses returned will be : 1-only courses that the student hasn't taken yet.
+    #2- courses will have a true or false value with them to indicate whether this course 
+    #is recommended for the student or not so he doesn't graduate late based off of the plan levels and 
+    #prerequisetes of courses
+    None
+
+def add_form_response(decoded_token):
+    #here we will add the student response to the form file. the response will have all the courses 
+    #he wants to study 
+    None
+
+def edit_form_response(decoded_token):
+    #the student can change his response for the given form.
+    #maybe just add the functionality to the add form response and make it edit 
+
 
 #End of Admin Functions Section _______________
 
