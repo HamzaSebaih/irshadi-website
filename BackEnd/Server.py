@@ -1024,23 +1024,6 @@ def get_form_statistics(decoded_token):
     None
 
 
-def get_form_courses(decoded_token):
-    #this will return the courses that the form contains which students can select from
-    #but the courses returned will be : 1-only courses that the student hasn't taken yet.
-    #2- courses will have a true or false value with them to indicate whether this course 
-    #is recommended for the student or not so he doesn't graduate late based off of the plan levels and 
-    #prerequisetes of courses
-    None
-
-def add_form_response(decoded_token):
-    #here we will add the student response to the form file. the response will have all the courses 
-    #he wants to study 
-    None
-
-def edit_form_response(decoded_token):
-    #the student can change his response for the given form.
-    #maybe just add the functionality to the add form response and make it edit 
-    None
 
 
 #End of Admin Functions Section _______________
@@ -1328,6 +1311,23 @@ def get_my_forms(decoded_token): # token_required provides decoded_token
         return jsonify({"error": "Failed to retrieve student forms due to an internal server error", "details": str(e)}), 500
 
 
+def get_form_courses(decoded_token):
+    #this will return the courses that the form contains which students can select from
+    #but the courses returned will be : 1-only courses that the student hasn't taken yet.
+    #2- courses will have a true or false value with them to indicate whether this course 
+    #is recommended for the student or not so he doesn't graduate late based off of the plan levels and 
+    #prerequisetes of courses
+    None
+
+def add_form_response(decoded_token):
+    #here we will add the student response to the form file. the response will have all the courses 
+    #he wants to study 
+    None
+
+def edit_form_response(decoded_token):
+    #the student can change his response for the given form.
+    #maybe just add the functionality to the add form response and make it edit 
+    None    
 
 #End Students Functions Section _______________
 
