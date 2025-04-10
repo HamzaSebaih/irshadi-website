@@ -781,7 +781,7 @@ def add_form(decoded_token): # admin_required provides decoded_token
                    "end_date": "YYYY-MM-DD", "plan": "PLAN_ID",
                    "max_hours": NUMBER, "max_graduate_hours": NUMBER,
                    "expected_students": NUMBER}
-    Initializes an empty 'Form_Responses' map.
+    Initializes 'Form_Responses' map and 'responses' counter to 0.
     """
     try:
         # --- 1. Get and Validate Input ---
@@ -789,9 +789,9 @@ def add_form(decoded_token): # admin_required provides decoded_token
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
 
-        # Updated required fields
+        # Required fields from request
         required_fields = ["title", "description", "start_date", "end_date", "plan",
-                           "max_hours", "max_graduate_hours", "expected_students"] # Added expected_students
+                           "max_hours", "max_graduate_hours", "expected_students"]
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
             return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
@@ -803,9 +803,9 @@ def add_form(decoded_token): # admin_required provides decoded_token
         plan_id = data.get('plan')
         max_hours = data.get('max_hours')
         max_graduate_hours = data.get('max_graduate_hours')
-        expected_students = data.get('expected_students') # New field
+        expected_students = data.get('expected_students')
 
-        # Basic type validation for original string fields
+        # Basic type validation for string fields
         if not all(isinstance(data.get(field), str) for field in ["title", "description", "start_date", "end_date", "plan"]):
              return jsonify({"error": "Fields 'title', 'description', 'start_date', 'end_date', 'plan' must be strings"}), 400
 
@@ -815,10 +815,9 @@ def add_form(decoded_token): # admin_required provides decoded_token
         if not isinstance(max_graduate_hours, int) or max_graduate_hours <= 0:
              return jsonify({"error": "'max_graduate_hours' must be a positive integer"}), 400
 
-        # --- Validate expected_students (NEW) ---
+        # Validate expected_students
         if not isinstance(expected_students, int) or expected_students < 0:
              return jsonify({"error": "'expected_students' must be a non-negative integer"}), 400
-        # --- End expected_students validation ---
 
         # Validate date strings and convert to datetime objects
         try:
@@ -861,8 +860,9 @@ def add_form(decoded_token): # admin_required provides decoded_token
             "plan_id": plan_id,
             "max_hours": max_hours,
             "max_graduate_hours": max_graduate_hours,
-            "expected_students": expected_students, # Added field
+            "expected_students": expected_students,
             "Form_Responses": {}, # Initialize empty MAP
+            "responses": 0, # *** Initialize response counter ***
             "created_at": datetime.now(timezone.utc)
         }
 
@@ -1558,7 +1558,10 @@ def add_form_response(decoded_token):
     (max_hours or max_graduate_hours based on student's progress).
     Stores the response in the form document under Form_Responses.[USER_ID],
     including a flag indicating if the graduate hour limit was applicable.
+    Increments the 'responses' counter on the form document for new responses.
     """
+    form_id = None # Initialize for error logging
+    uid = None # Initialize for error logging
     try:
         # --- 1. Get Input and User ID ---
         uid = decoded_token.get('uid')
@@ -1587,16 +1590,22 @@ def add_form_response(decoded_token):
         form_ref = db.collection('Forms').document(form_id)
         student_ref = db.collection('Students').document(uid)
 
+        # --- Check if student has already responded (for accurate increment) ---
+        # We need the form doc first to check the responses map
         form_doc = form_ref.get()
-        student_doc = student_ref.get()
-
         if not form_doc.exists:
              return jsonify({"error": f"Form '{form_id}' not found"}), 404
+        form_data = form_doc.to_dict()
+        # Check if this UID already exists in the responses map
+        student_already_responded = uid in form_data.get('Form_Responses', {})
+        # --- End check ---
+
+
+        student_doc = student_ref.get()
         if not student_doc.exists:
              return jsonify({"error": "Student profile not found"}), 404
-
-        form_data = form_doc.to_dict()
         student_data = student_doc.to_dict()
+
 
         # Get form details needed for validation
         start_date = form_data.get('start_date') # Timestamp
@@ -1623,17 +1632,15 @@ def add_form_response(decoded_token):
 
         # --- 3. Check Form Active Status ---
         current_time = datetime.now(timezone.utc)
-        # Ensure dates have timezone info (assuming UTC if missing)
         start_date = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
         end_date = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
 
-        # Check if form is active (adjust end_date comparison if needed for inclusivity)
         if not (start_date <= current_time < end_date):
              return jsonify({"error": f"Form '{form_id}' is not currently active for submissions."}), 403
 
         # --- 4. Calculate Total Selected Hours ---
         total_selected_hours = 0
-        if selected_courses: # Only fetch if courses were selected
+        if selected_courses:
             course_refs_to_get = [db.collection('Courses').document(cid) for cid in selected_courses]
             course_docs = db.get_all(course_refs_to_get)
             found_hours_count = 0
@@ -1660,8 +1667,7 @@ def add_form_response(decoded_token):
         achieved_hours = completed_hours + exchanged_hours
         remaining_hours = required_hours_for_plan - achieved_hours
 
-        # Check if student is considered graduating for hour limit purposes
-        is_graduating = (remaining_hours <= max_graduate_hours) # This boolean is calculated here
+        is_graduating = (remaining_hours <= max_graduate_hours)
         applicable_limit = max_graduate_hours if is_graduating else max_hours
         limit_type = "graduate" if is_graduating else "standard"
 
@@ -1671,17 +1677,29 @@ def add_form_response(decoded_token):
                 "error": f"Selected hours ({total_selected_hours}) exceed the allowed {limit_type} limit ({applicable_limit}) for this form."
             }), 400
 
-        # --- 7. Prepare and Store Response ---
+        # --- 7. Prepare and Store Response (with Counter Increment) ---
         response_data = {
             "selected_courses": selected_courses,
             "total_hours": total_selected_hours,
             "submitted_at": current_time,
-            "is_graduating": is_graduating # *** Added the boolean flag here ***
+            "is_graduating": is_graduating
         }
+
+        # Prepare the update payload
         update_payload = {
-            f'Form_Responses.{uid}': response_data,
-            'last_response_at': current_time
+            f'Form_Responses.{uid}': response_data, # Add/overwrite student response
+            'last_response_at': current_time      # Update last response timestamp
         }
+
+        # *** Atomically increment counter only if it's a NEW response ***
+        if not student_already_responded:
+             # Use firestore.Increment to safely increase the counter by 1
+             # Using the new field name 'responses' as requested.
+             # Ensure the /addForm function also initializes 'responses: 0'.
+             update_payload['responses'] = firestore.Increment(1) # *** Changed key name ***
+        # *** End counter increment ***
+
+        # Update the form document
         form_ref.update(update_payload)
 
         # --- 8. Return Success Response ---
@@ -1690,10 +1708,10 @@ def add_form_response(decoded_token):
         }), 200
 
     except Exception as e:
-        uid_local = decoded_token.get('uid', 'unknown')
-        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        # Log error with more context if available
+        uid_local = uid if 'uid' in locals() and uid else 'unknown'
+        form_id_local = form_id if 'form_id' in locals() and form_id else 'unknown'
         print(f"Error in /addFormResponse for form {form_id_local}, user {uid_local}: {e}")
-        import traceback
         traceback.print_exc()
         return jsonify({"error": "Failed to submit form response due to an internal server error", "details": str(e)}), 500
 
