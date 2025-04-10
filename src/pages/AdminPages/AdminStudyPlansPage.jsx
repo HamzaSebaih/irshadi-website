@@ -118,7 +118,7 @@ const AdminStudyPlansPage = () => {
               <div className="flex justify-between mt-4 px-4">
                 <Link
                   to={`/editPlan`} //here I will pass other elemnts to the editPlan (passing the whole plan)
-                  state={{ plan: plan }} //passing the plan to the next page
+                  state={{ plan: plan}} //passing the plan to the next page
                   className="bg-blue-600 text-white px-8 py-2 rounded-full hover:bg-blue-800 transition-colors"
                 >
                   Edit
