@@ -13,7 +13,7 @@ import datetime
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-
+import collections # For defaultdict
 #End of Importing Section ___________
 
 load_dotenv() # Load environment variables (optional, for production)
@@ -325,7 +325,7 @@ def add_course(decoded_token):
             return jsonify({"error": "No data provided"}), 400
 
         # Step 1: Extract and validate required fields
-        department = data.get('department')#CPIT
+        department = data.get('department','').upper()#CPIT
         course_number = data.get('course_number')#470
         course_name = data.get('course_name')#networks 2
         hours = data.get('hours')# 3
@@ -345,6 +345,7 @@ def add_course(decoded_token):
 
         # Convert course_number to string for the document ID
         course_number_str = str(course_number)
+        
 
         # Step 2: Create a unique document ID (e.g., "CPIT-251")
         course_id = f"{department}-{course_number_str}"
@@ -511,9 +512,10 @@ def add_plan(decoded_token):
     """
     Creates a new plan document in the 'Plans' collection using the plan name as the key.
     Requires admin privileges.
-    Expects JSON: {"plan_name": "PLAN_NAME", "levels": NUMBER_OF_LEVELS}
+    Expects JSON: {"plan_name": "PLAN_NAME", "levels": NUMBER_OF_LEVELS, "required_hours": TOTAL_HOURS}
     Initializes the plan with a 'levels' map containing empty lists for each numbered level
     (e.g., "Level 1": [], "Level 2": [], ...) AND an additional "Extra" level.
+    Also saves the total required hours for the plan.
     """
     try:
         # --- 1. Get and Validate Input ---
@@ -523,38 +525,40 @@ def add_plan(decoded_token):
 
         plan_name = data.get('plan_name')
         num_levels = data.get('levels') # Get the number of levels
+        required_hours = data.get('required_hours') # Get the required hours (NEW)
 
         # Basic validation for plan_name
         if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
             return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
 
         # Validation for levels
-
         if num_levels is None:
              return jsonify({"error": "Missing 'levels' attribute in request body"}), 400
         if not isinstance(num_levels, int) or num_levels <= 0:
-             print(num_levels)
+             print(f"Invalid num_levels received: {num_levels}") # Added print for debugging
              return jsonify({"error": "'levels' must be a positive integer"}), 400
+
+        # --- Validation for required_hours (NEW) ---
+        if required_hours is None:
+             return jsonify({"error": "Missing 'required_hours' attribute in request body"}), 400
+        if not isinstance(required_hours, int) or required_hours <= 0:
+             return jsonify({"error": "'required_hours' must be a positive integer"}), 400
+        # --- End required_hours validation ---
 
         # Use stripped name as the document ID
         plan_name = plan_name.strip()
 
         # --- 2. Check for Existing Plan ---
-        # Reference the document using the plan name as the ID in the 'Plans' collection
         plan_ref = db.collection('Plans').document(plan_name)
-
-        # Check if a document with this ID already exists
         if plan_ref.get().exists:
-            # Return 409 Conflict if the plan name is already taken
             return jsonify({"error": f"Plan '{plan_name}' already exists"}), 409
 
-        # --- 3. Create New Plan Document with Levels + Extra ---
-        # Prepare the data for the new document
+        # --- 3. Create New Plan Document with Levels + Extra + Required Hours ---
         last_updated_date = datetime.now(timezone.utc)
         plan_data = {
-            'last_update_date':last_updated_date,
+            'last_update_date': last_updated_date,
+            'required_hours': required_hours, # Added required_hours
             'levels': {} # Initialize the map field for levels
-
         }
 
         # Populate the levels map based on the num_levels input
@@ -562,20 +566,20 @@ def add_plan(decoded_token):
             level_key = f"Level {i}" # Create keys like "Level 1", "Level 2", etc.
             plan_data['levels'][level_key] = [] # Add each level with an empty list
 
-        # --- Add the 'Extra' level AFTER the numbered levels ---
+        # Add the 'Extra' level AFTER the numbered levels
         plan_data['levels']['Extra'] = []
-        # --- End of modification ---
 
         # Set the data in Firestore, creating the document
         plan_ref.set(plan_data)
 
         # --- 4. Return Success Response ---
-        # Return 201 Created status code for successful resource creation
+        # Includes fields added in the user's provided snippet
         return jsonify({
-            "message": f"Plan '{plan_name}' created successfully with {num_levels} numbered levels and an 'Extra' level initialized.",
-            "plan_name": plan_name # we will return the plan name and other info
-            ,"plan_levels": num_levels
-            ,"last_updated_date": last_updated_date
+            "message": f"Plan '{plan_name}' created successfully with {num_levels} numbered levels, an 'Extra' level, and {required_hours} required hours.",
+            "plan_name": plan_name,
+            "plan_levels": num_levels,
+            "required_hours": required_hours, # Also return the required hours
+            "last_updated_date": last_updated_date
             }), 201
 
     except Exception as e:
@@ -785,8 +789,9 @@ def add_form(decoded_token): # admin_required provides decoded_token
     Adds a new form document to the 'Forms' collection with a sequential numeric ID.
     Requires admin privileges.
     Expects JSON: {"title": "...", "description": "...", "start_date": "YYYY-MM-DD",
-                   "end_date": "YYYY-MM-DD", "plan": "PLAN_ID"}
-    Initializes an empty 'Form_Responses' list.
+                   "end_date": "YYYY-MM-DD", "plan": "PLAN_ID",
+                   "max_hours": NUMBER, "max_graduate_hours": NUMBER}
+    Initializes an empty 'Form_Responses' map (changed from list).
     """
     try:
         # --- 1. Get and Validate Input ---
@@ -794,7 +799,8 @@ def add_form(decoded_token): # admin_required provides decoded_token
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
 
-        required_fields = ["title", "description", "start_date", "end_date", "plan"]
+        # Updated required fields
+        required_fields = ["title", "description", "start_date", "end_date", "plan", "max_hours", "max_graduate_hours"]
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
             return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
@@ -803,26 +809,33 @@ def add_form(decoded_token): # admin_required provides decoded_token
         description = data.get('description')
         start_date_str = data.get('start_date')
         end_date_str = data.get('end_date')
-        plan_id = data.get('plan') # ID of the plan associated with this form
+        plan_id = data.get('plan')
+        max_hours = data.get('max_hours') # New field
+        max_graduate_hours = data.get('max_graduate_hours') # New field
 
-        # Basic type validation
+        # Basic type validation for original string fields
         if not all(isinstance(data.get(field), str) for field in ["title", "description", "start_date", "end_date", "plan"]):
              return jsonify({"error": "Fields 'title', 'description', 'start_date', 'end_date', 'plan' must be strings"}), 400
+
+        # --- Validate new hour limit fields ---
+        if not isinstance(max_hours, int) or max_hours <= 0:
+             return jsonify({"error": "'max_hours' must be a positive integer"}), 400
+        if not isinstance(max_graduate_hours, int) or max_graduate_hours <= 0:
+             return jsonify({"error": "'max_graduate_hours' must be a positive integer"}), 400
+        # --- End hour limit validation ---
 
         # Validate date strings and convert to datetime objects (assuming YYYY-MM-DD format)
         try:
             # Combine date with minimum time for Timestamp conversion
             start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d")
             end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d")
-            # Optional: Set time to end of day for end_date
-            # end_datetime = end_datetime.replace(hour=23, minute=59, second=59)
 
             if end_datetime < start_datetime:
                  return jsonify({"error": "'end_date' cannot be before 'start_date'"}), 400
 
             # Convert to Firestore Timestamps (UTC is recommended)
             start_timestamp = datetime.combine(start_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
-            end_timestamp = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc) # Or use end_datetime if time is set
+            end_timestamp = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
 
         except ValueError:
             return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD"}), 400
@@ -830,42 +843,39 @@ def add_form(decoded_token): # admin_required provides decoded_token
         # Check if the associated plan exists
         plan_ref = db.collection('Plans').document(plan_id)
         if not plan_ref.get().exists:
-             return jsonify({"error": f"Associated plan '{plan_id}' not found"}), 404 # Or 400
+             return jsonify({"error": f"Associated plan '{plan_id}' not found"}), 404
 
         # --- 2. Generate Sequential ID ---
         # WARNING: This method can be inefficient and prone to race conditions under high load.
-        # Consider Firestore auto-generated IDs or a dedicated counter document for robustness.
         forms_ref = db.collection('Forms')
         forms_stream = forms_ref.stream()
         max_id = 0
         for doc in forms_stream:
             try:
-                # Attempt to convert document ID to integer
                 doc_id_int = int(doc.id)
                 if doc_id_int > max_id:
                     max_id = doc_id_int
             except ValueError:
-                # Ignore documents with non-integer IDs if any exist
-                continue
+                continue # Ignore non-integer IDs
 
         new_form_id = max_id + 1
-        new_form_id_str = str(new_form_id) # Use the string representation as the document ID
+        new_form_id_str = str(new_form_id) # Use string representation
 
         # --- 3. Prepare Form Data ---
         form_data = {
             "title": title,
             "description": description,
-            "start_date": start_timestamp, # Store as Timestamp
-            "end_date": end_timestamp,     # Store as Timestamp
+            "start_date": start_timestamp,
+            "end_date": end_timestamp,
             "plan_id": plan_id,
-            "Form_Responses": [], # Initialize empty list for responses
-            "created_at": datetime.now(timezone.utc) # Add creation timestamp
+            "max_hours": max_hours,                 # Added field
+            "max_graduate_hours": max_graduate_hours, # Added field
+            "Form_Responses": {}, # Initialize empty MAP for responses (more practical)
+            "created_at": datetime.now(timezone.utc)
         }
 
         # --- 4. Create New Form Document ---
         form_doc_ref = forms_ref.document(new_form_id_str)
-        # Optional: Use a transaction here if strict sequential ID guarantee is needed
-        # to prevent race conditions where two requests might calculate the same next ID.
         form_doc_ref.set(form_data)
 
         # --- 5. Return Success Response ---
@@ -881,12 +891,13 @@ def add_form(decoded_token): # admin_required provides decoded_token
         return jsonify({"error": "Failed to add form due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getForms', methods=['GET'])
-@admin_required # Assuming any logged-in user can view the list of forms
-def get_forms(decoded_token): # token_required provides decoded_token
+@admin_required # Using admin_required as provided in the prompt
+def get_forms(decoded_token): # admin_required provides decoded_token
     """
     Retrieves a list of all available forms from the 'Forms' collection.
-    Requires user authentication.
-    Returns a JSON list containing each form's ID and its data,
+    Requires admin authentication.
+    Returns a JSON list containing each form's ID and its data
+    (including title, description, dates, plan_id, max_hours, max_graduate_hours, etc.),
     EXCLUDING the 'Form_Responses' field.
     """
     try:
@@ -908,6 +919,8 @@ def get_forms(decoded_token): # token_required provides decoded_token
             # --- End of exclusion ---
 
             # Combine the form ID and the modified data
+            # The **form_data unpacking automatically includes all remaining fields
+            # from the Firestore document, including max_hours and max_graduate_hours if they exist.
             form_entry = {
                 "form_id": form_id,
                 **form_data # Unpack the rest of the form data
@@ -923,7 +936,6 @@ def get_forms(decoded_token): # token_required provides decoded_token
         print(f"Error in /getForms: {e}")
         # Return a generic server error message
         return jsonify({"error": "Failed to retrieve forms due to an internal server error", "details": str(e)}), 500
-
 
 @app.route('/editForm', methods=['PATCH']) # Using PATCH for partial updates
 @admin_required
@@ -1022,7 +1034,6 @@ def edit_form(decoded_token): # admin_required provides decoded_token
 def get_form_statistics(decoded_token):
     #this will show the form statistics, 
     None
-
 
 
 
@@ -1226,17 +1237,6 @@ def update_student_data(uid):
     print("")
     print("Updated Firestore document with data:", updated_data)
 
-@app.route('/addResponse', methods=['POST'])
-@token_required
-def add_Response(decoded_token):#WIP, Response Structure WIP
-    #NOTE Goal is adding a response document to the SurveyResponses collections, 
-    #WIP, Response Structure WIP
-    try:
-        
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/getMyForms', methods=['GET'])
 @token_required # Ensures only logged-in users (students/admins) can call this
 def get_my_forms(decoded_token): # token_required provides decoded_token
@@ -1310,24 +1310,336 @@ def get_my_forms(decoded_token): # token_required provides decoded_token
         # Return a generic server error message
         return jsonify({"error": "Failed to retrieve student forms due to an internal server error", "details": str(e)}), 500
 
-
+@app.route('/getFormCourses', methods=['POST'])
+@token_required
 def get_form_courses(decoded_token):
-    #this will return the courses that the form contains which students can select from
-    #but the courses returned will be : 1-only courses that the student hasn't taken yet.
-    #2- courses will have a true or false value with them to indicate whether this course 
-    #is recommended for the student or not so he doesn't graduate late based off of the plan levels and 
-    #prerequisetes of courses
-    None
+    """
+    Retrieves courses associated with a specific form, filtered for the calling student.
+    Requires user authentication. Expects form_id in the JSON request body.
+    Returns lists of available, unavailable (prereqs not met), unavailable (finished),
+    recommended courses, AND the student's previously selected courses for this form, if any.
+    Recommendations prioritize 'important' courses (prerequisites for others)
+    from the earliest available level. Includes fallback logic.
+    """
+    try:
+        # --- Get form_id from JSON Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+        form_id = form_id.strip()
+        # --- End form_id retrieval ---
 
+        # --- 1. Get Student UID and Finished Courses ---
+        uid = decoded_token.get('uid')
+        if not uid:
+             return jsonify({"error": "UID not found in token"}), 400
+
+        student_ref = db.collection('Students').document(uid)
+        student_doc = student_ref.get()
+        if not student_doc.exists:
+             return jsonify({"error": "Student profile not found"}), 404
+
+        student_data = student_doc.to_dict()
+        # Use a set for efficient prerequisite checking
+        finished_courses_set = set(student_data.get('Finished_Courses', []))
+
+        # --- 2. Get Form, associated Plan ID, and Previous Response ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+        if not form_doc.exists:
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+
+        form_data = form_doc.to_dict()
+        plan_id = form_data.get('plan_id')
+        if not plan_id:
+             return jsonify({"error": f"Form '{form_id}' does not have an associated plan_id"}), 400
+
+        # --- Get previously selected courses (NEW) ---
+        previously_selected_courses = []
+        form_responses_map = form_data.get('Form_Responses', {}) # Get the responses map safely
+        if isinstance(form_responses_map, dict): # Ensure it's a map
+            student_previous_response = form_responses_map.get(uid) # Get this student's entry
+            if isinstance(student_previous_response, dict): # Ensure the entry is a map
+                # Get the list, default to empty list if key missing or not a list
+                courses = student_previous_response.get('selected_courses', [])
+                if isinstance(courses, list):
+                     previously_selected_courses = courses
+        # --- End getting previous selection ---
+
+
+        # --- 3. Get Plan Structure ---
+        plan_ref = db.collection('Plans').document(plan_id)
+        plan_doc = plan_ref.get()
+        if not plan_doc.exists:
+             return jsonify({"error": f"Plan '{plan_id}' associated with form '{form_id}' not found"}), 404
+
+        plan_data = plan_doc.to_dict()
+        levels_map = plan_data.get('levels', {})
+        if not levels_map:
+             return jsonify({"error": f"Plan '{plan_id}' has no levels defined"}), 400
+
+        # --- 4. Extract All Courses from Plan & Store Level Info ---
+        all_plan_courses_with_level = [] # Store tuples (course_id, level_key)
+        level_order = {} # Store numeric order for sorting levels
+        level_counter = 1
+        # Sort level keys based on assumed numeric prefix or place 'Extra' last
+        sorted_level_keys = sorted(levels_map.keys(), key=lambda k: int(k.split(' ')[1]) if k.startswith('Level ') and k.split(' ')[1].isdigit() else float('inf'))
+
+        for level_key in sorted_level_keys:
+            courses = levels_map[level_key]
+            if not isinstance(courses, list): continue # Skip if not a list
+            level_order[level_key] = level_counter # Assign order based on sorted keys
+            level_counter += 1
+            for course_id in courses:
+                 if isinstance(course_id, str): # Ensure course_id is a string
+                      all_plan_courses_with_level.append((course_id, level_key))
+
+        all_plan_course_ids = list(set(c[0] for c in all_plan_courses_with_level)) # Unique course IDs
+
+        # --- 5. Fetch Prerequisites for All Plan Courses ---
+        course_prereqs = collections.defaultdict(list) # {course_id: [prereq1,...]}
+        course_refs_to_get = [db.collection('Courses').document(cid) for cid in all_plan_course_ids]
+        course_docs = db.get_all(course_refs_to_get) # Use batch fetching
+
+        for course_doc in course_docs:
+             if course_doc.exists:
+                  course_id = course_doc.id
+                  course_data = course_doc.to_dict()
+                  prereqs = course_data.get('prerequisites', [])
+                  if isinstance(prereqs, list):
+                       course_prereqs[course_id] = prereqs
+
+        # --- 5b. Calculate Dependency Count ---
+        dependency_count = collections.defaultdict(int)
+        for course_id in all_plan_course_ids: # Iterate through all courses in the plan
+            # Check the prerequisites defined FOR OTHER courses
+            for other_course_id, prereqs in course_prereqs.items():
+                 if course_id in prereqs: # If this course_id is a prereq for other_course_id
+                      dependency_count[course_id] += 1 # Increment its dependency count
+
+        # --- 6. Filter Courses for the Student ---
+        available_courses = []
+        unavailable_prereqs = []
+        unavailable_finished = []
+
+        for course_id in all_plan_course_ids:
+            if course_id in finished_courses_set:
+                 unavailable_finished.append(course_id)
+                 continue # Skip further checks if already finished
+
+            # Check prerequisites
+            prereqs_for_course = set(course_prereqs.get(course_id, []))
+            if prereqs_for_course.issubset(finished_courses_set):
+                 available_courses.append(course_id)
+            else:
+                 missing_prereqs = list(prereqs_for_course - finished_courses_set)
+                 unavailable_prereqs.append({"course_id": course_id, "missing": missing_prereqs})
+
+
+        # --- 7. Recommendation Logic with Fallback ---
+        recommended_courses = []
+        min_level_num = float('inf')
+        available_courses_set = set(available_courses) # For quick lookup
+
+        # Find the minimum level order number that has available courses
+        if available_courses: # Only calculate min_level if there are available courses
+            for course_id, level_key in all_plan_courses_with_level:
+                 if course_id in available_courses_set:
+                      level_num = level_order.get(level_key, float('inf'))
+                      min_level_num = min(min_level_num, level_num)
+
+        # Primary recommendation: Add available courses from that minimum level order IF they are prerequisites for others
+        if min_level_num != float('inf'):
+             for course_id, level_key in all_plan_courses_with_level:
+                  if (course_id in available_courses_set and
+                          level_order.get(level_key) == min_level_num and
+                          dependency_count.get(course_id, 0) > 0): # Check dependency count
+                       recommended_courses.append(course_id)
+
+        recommended_courses = list(set(recommended_courses)) # Remove duplicates from primary logic
+
+        # --- Fallback Recommendation Logic ---
+        if not recommended_courses and available_courses:
+            print(f"INFO: No important courses found in earliest level ({min_level_num}). Falling back to highest dependency available courses.")
+            available_with_deps = [(c_id, dependency_count.get(c_id, 0)) for c_id in available_courses]
+            available_with_deps.sort(key=lambda item: item[1], reverse=True)
+            recommended_courses = [item[0] for item in available_with_deps]
+        # --- End Fallback ---
+
+
+        # --- 8. Return Response ---
+        return jsonify({
+            "form_id": form_id,
+            "plan_id": plan_id,
+            "available_courses": available_courses,
+            "recommended_courses": recommended_courses,
+            "unavailable_due_to_prerequisites": unavailable_prereqs,
+            "unavailable_due_to_completion": unavailable_finished,
+            "previously_selected_courses": previously_selected_courses # Added previously selected
+        }), 200
+
+    except Exception as e:
+        uid_local = decoded_token.get('uid', 'unknown')
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /getFormCourses for form {form_id_local}, user {uid_local}: {e}")
+        import traceback
+        traceback.print_exc() # Print detailed traceback for debugging
+        return jsonify({"error": "Failed to retrieve form courses due to an internal server error", "details": str(e)}), 500
+
+@app.route('/addFormResponse', methods=['POST'])
+@token_required # Student needs to be logged in
 def add_form_response(decoded_token):
-    #here we will add the student response to the form file. the response will have all the courses 
-    #he wants to study 
-    None
+    """
+    Adds or updates a student's response (list of selected courses) to a specific form.
+    Requires user authentication.
+    Expects JSON: {"form_id": "FORM_ID", "selected_courses": ["COURSE-ID-1", ...]}
+    Checks if the form exists and is currently active.
+    Validates that the total hours of selected courses do not exceed the limit
+    (max_hours or max_graduate_hours based on student's progress).
+    Stores the response in the form document under Form_Responses.[USER_ID].
+    """
+    try:
+        # --- 1. Get Input and User ID ---
+        uid = decoded_token.get('uid')
+        if not uid:
+             return jsonify({"error": "UID not found in token"}), 400
 
-def edit_form_response(decoded_token):
-    #the student can change his response for the given form.
-    #maybe just add the functionality to the add form response and make it edit 
-    None    
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+
+        form_id = data.get('form_id')
+        selected_courses = data.get('selected_courses')
+
+        # Validate inputs
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' (must be a non-empty string)"}), 400
+        if not isinstance(selected_courses, list) or not all(isinstance(c, str) for c in selected_courses):
+            return jsonify({"error": "'selected_courses' must be a list of course ID strings"}), 400
+
+        form_id = form_id.strip()
+        # Clean up selected courses list (remove duplicates and empty strings)
+        selected_courses = list(set(filter(None, [c.strip() for c in selected_courses])))
+
+
+        # --- 2. Fetch Form, Student, and Plan Data ---
+        form_ref = db.collection('Forms').document(form_id)
+        student_ref = db.collection('Students').document(uid)
+
+        form_doc = form_ref.get()
+        student_doc = student_ref.get()
+
+        if not form_doc.exists:
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+        if not student_doc.exists:
+             return jsonify({"error": "Student profile not found"}), 404
+
+        form_data = form_doc.to_dict()
+        student_data = student_doc.to_dict()
+
+        # Get form details needed for validation
+        start_date = form_data.get('start_date') # Timestamp
+        end_date = form_data.get('end_date')     # Timestamp
+        max_hours = form_data.get('max_hours')
+        max_graduate_hours = form_data.get('max_graduate_hours')
+        plan_id = form_data.get('plan_id')
+
+        # Validate form configuration
+        if not all([isinstance(start_date, datetime), isinstance(end_date, datetime),
+                    isinstance(max_hours, int), isinstance(max_graduate_hours, int), plan_id]):
+             print(f"Warning: Form {form_id} has invalid/missing configuration (dates, hours, plan_id).")
+             return jsonify({"error": "Form configuration is incomplete or invalid"}), 500
+
+        # Fetch Plan's required hours
+        plan_ref = db.collection('Plans').document(plan_id)
+        plan_doc = plan_ref.get()
+        if not plan_doc.exists:
+             return jsonify({"error": f"Plan '{plan_id}' associated with form not found"}), 404
+        plan_data = plan_doc.to_dict()
+        required_hours_for_plan = plan_data.get('required_hours')
+        if not isinstance(required_hours_for_plan, int) or required_hours_for_plan <= 0:
+             return jsonify({"error": f"Plan '{plan_id}' has invalid 'required_hours'"}), 500
+
+        # --- 3. Check Form Active Status ---
+        current_time = datetime.now(timezone.utc)
+        # Ensure dates have timezone info (assuming UTC if missing)
+        start_date = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
+        end_date = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
+
+        # Check if form is active (adjust end_date comparison if needed for inclusivity)
+        if not (start_date <= current_time < end_date):
+             return jsonify({"error": f"Form '{form_id}' is not currently active for submissions."}), 403
+
+        # --- 4. Calculate Total Selected Hours ---
+        total_selected_hours = 0
+        if selected_courses: # Only fetch if courses were selected
+            course_refs_to_get = [db.collection('Courses').document(cid) for cid in selected_courses]
+            course_docs = db.get_all(course_refs_to_get)
+            found_hours_count = 0
+            for course_doc in course_docs:
+                if course_doc.exists:
+                    course_data = course_doc.to_dict()
+                    course_hours = course_data.get('hours')
+                    if isinstance(course_hours, int) and course_hours >= 0:
+                        total_selected_hours += course_hours
+                        found_hours_count += 1
+                    else:
+                        print(f"Warning: Course {course_doc.id} has invalid/missing 'hours'.")
+                        # Decide: return error or ignore course? Returning error for safety.
+                        return jsonify({"error": f"Configuration error for course '{course_doc.id}' (invalid hours)."}), 500
+                else:
+                    # A selected course doesn't exist in the Courses collection
+                    return jsonify({"error": f"Selected course '{course_doc.id}' not found."}), 400
+
+            # Double-check if all selected courses were found (optional)
+            if found_hours_count != len(selected_courses):
+                 return jsonify({"error": "One or more selected courses could not be verified."}), 400
+
+
+        # --- 5. Determine Applicable Hour Limit ---
+        completed_hours = student_data.get('hours', {}).get('completed', 0)
+        exchanged_hours = student_data.get('hours', {}).get('exchanged', 0)
+        achieved_hours = completed_hours + exchanged_hours
+        remaining_hours = required_hours_for_plan - achieved_hours
+
+        # Check if student is considered graduating for hour limit purposes
+        is_graduating = (remaining_hours <= max_graduate_hours)
+        applicable_limit = max_graduate_hours if is_graduating else max_hours
+        limit_type = "graduate" if is_graduating else "standard"
+
+        # --- 6. Validate Selected Hours Against Limit ---
+        if total_selected_hours > applicable_limit:
+            return jsonify({
+                "error": f"Selected hours ({total_selected_hours}) exceed the allowed {limit_type} limit ({applicable_limit}) for this form."
+            }), 400
+
+        # --- 7. Prepare and Store Response ---
+        response_data = {
+            "selected_courses": selected_courses,
+            "total_hours": total_selected_hours, # Store calculated hours
+            "submitted_at": current_time
+        }
+        update_payload = {
+            f'Form_Responses.{uid}': response_data,
+            'last_response_at': current_time
+        }
+        form_ref.update(update_payload)
+
+        # --- 8. Return Success Response ---
+        return jsonify({
+            "message": f"Your response for form '{form_id}' ({total_selected_hours} hours) has been submitted successfully."
+        }), 200
+
+    except Exception as e:
+        uid_local = decoded_token.get('uid', 'unknown')
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /addFormResponse for form {form_id_local}, user {uid_local}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Failed to submit form response due to an internal server error", "details": str(e)}), 500
 
 #End Students Functions Section _______________
 
