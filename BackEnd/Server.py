@@ -451,24 +451,6 @@ def add_course_prerequisite(decoded_token): # The admin_required decorator injec
         # Return a generic server error message
         return jsonify({"error": "Failed to add course prerequisite due to an internal server error", "details": str(e)}), 500
 
-@app.route('/addSurvey', methods=['POST'])
-@admin_required
-def add_Survey(decoded_token):#WIP Structure
-    #GOAL: add a new survey to the survey collection
-    #WIP Strucutre is not strict. dependent on frontend
-    try:
-        # Get data from the request (e.g., JSON payload)
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        survey_id = data.get("Survey_ID") #extracts the id key value
-        # Add data to Firestore
-        db.collection('Surveys').document(survey_id).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/getCourses', methods=['GET'])
 @admin_required
 def get_courses(decoded_token):
@@ -1066,6 +1048,49 @@ def delete_form(decoded_token):
         # Return a generic server error message
         return jsonify({"error": "Failed to delete form due to an internal server error", "details": str(e)}), 500
 
+@app.route('/deletePlan', methods=['POST'])
+@admin_required 
+def delete_plan(decoded_token):
+    """
+    Deletes a specific form document from the 'Plans' collection.
+    Requires admin authentication.
+    Expects the plan_id in the JSON request body: {"plan_id": "PLAN_ID"}
+    """
+    try:
+        # --- 1. Get form_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        plan_id = data.get('plan_id')
+
+        # Validate form_id
+        if not plan_id or not isinstance(plan_id, str) or not plan_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+        plan_id = plan_id.strip()
+        # --- End form_id retrieval ---
+
+        # --- 2. Get Document Reference and Check Existence ---
+        plan_ref = db.collection('Plans').document(plan_id)
+        plan_doc = plan_ref.get()
+
+        if not plan_doc.exists:
+             # If the document doesn't exist, return 404 Not Found
+             return jsonify({"error": f"plan '{plan_id}' not found"}), 404
+
+        # --- 3. Delete the Document ---
+        plan_ref.delete()
+
+        # --- 4. Return Success Response ---
+        # Return 200 OK on successful deletion
+        return jsonify({"message": f"plan '{plan_id}' deleted successfully"}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        plan_id_local = plan_id if 'plan_id' in locals() else 'unknown'
+        print(f"Error in /deleteplan for plan_id {plan_id_local}: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to delete form due to an internal server error", "details": str(e)}), 500
+
 def get_form_statistics(decoded_token):
     #this will show the form statistics, 
     None
@@ -1353,7 +1378,8 @@ def get_form_courses(decoded_token):
     Requires user authentication. Expects form_id in the JSON request body.
     VALIDATES that the student's record was updated AFTER the form's start date.
     Returns lists of available, unavailable (prereqs not met), unavailable (finished),
-    recommended courses, AND the student's previously selected courses for this form, if any.
+    recommended courses, the student's previously selected courses, AND the form's
+    max_graduate_hours limit.
     Recommendations prioritize 'important' courses (prerequisites for others)
     from the earliest available level. Includes fallback logic.
     """
@@ -1373,12 +1399,12 @@ def get_form_courses(decoded_token):
         # --- 1. Get Student UID and Data ---
         uid = decoded_token.get('uid')
         if not uid:
-            return jsonify({"error": "UID not found in token"}), 400
+             return jsonify({"error": "UID not found in token"}), 400
 
         student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
         if not student_doc.exists:
-            return jsonify({"error": "Student profile not found"}), 404
+             return jsonify({"error": "Student profile not found"}), 404
 
         student_data = student_doc.to_dict()
         # Use a set for efficient prerequisite checking
@@ -1389,33 +1415,36 @@ def get_form_courses(decoded_token):
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
         if not form_doc.exists:
-            return jsonify({"error": f"Form '{form_id}' not found"}), 404
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
         form_data = form_doc.to_dict()
         plan_id = form_data.get('plan_id')
         form_start_date = form_data.get('start_date') # Get form start date
+        # *** Get max_graduate_hours from form data (NEW) ***
+        max_graduate_hours_from_form = form_data.get('max_graduate_hours')
 
         if not plan_id:
-            return jsonify({"error": f"Form '{form_id}' does not have an associated plan_id"}), 400
+             return jsonify({"error": f"Form '{form_id}' does not have an associated plan_id"}), 400
         # Ensure form_start_date is a datetime object (Timestamp from Firestore)
         if not isinstance(form_start_date, datetime):
             print(f"Warning: Form {form_id} has invalid/missing 'start_date'. Type: {type(form_start_date)}")
             return jsonify({"error": "Form configuration is incomplete or invalid (start_date)."}), 500
+        # Ensure max_graduate_hours was found and is an int (added in /addForm)
+        if not isinstance(max_graduate_hours_from_form, int):
+             print(f"Warning: Form {form_id} has invalid/missing 'max_graduate_hours'.")
+             return jsonify({"error": "Form configuration is incomplete or invalid (max_graduate_hours)."}), 500
 
-        # --- 2b. Validate Student Data Freshness (NEW STEP) ---
+        # --- 2b. Validate Student Data Freshness ---
         # Ensure student_last_updated is a datetime object
         if not isinstance(student_last_updated, datetime):
-            # Student record has never been updated by the extension or has invalid data
-            return jsonify({"error": "Please update your academic record using the extension before accessing this form."}), 403 # 403 Forbidden
+            return jsonify({"error": "Please update your academic record using the extension before accessing this form."}), 403
 
         # Ensure timestamps are comparable (make them timezone-aware, assuming UTC if missing)
-        # Firestore Timestamps are typically already timezone-aware (UTC)
         form_start_date_utc = form_start_date.replace(tzinfo=timezone.utc) if form_start_date.tzinfo is None else form_start_date
         student_last_updated_utc = student_last_updated.replace(tzinfo=timezone.utc) if student_last_updated.tzinfo is None else student_last_updated
 
         if student_last_updated_utc <= form_start_date_utc:
-            # Student data is older than or same time as form start date, require update
-            return jsonify({"error": "Your academic record is outdated relative to this form. Please update it using the extension."}), 403 # 403 Forbidden
+            return jsonify({"error": "Your academic record is outdated relative to this form. Please update it using the extension."}), 403
         # --- End Freshness Check ---
 
 
@@ -1475,12 +1504,11 @@ def get_form_courses(decoded_token):
         # --- 6b. Calculate Dependency Count ---
         dependency_count = collections.defaultdict(int)
         for course_id in all_plan_course_ids:
-            # Check the prerequisites defined FOR OTHER courses in the plan
             for other_course_id in all_plan_course_ids:
-                 if other_course_id == course_id: continue # Don't check self
+                 if other_course_id == course_id: continue
                  prereqs = course_prereqs.get(other_course_id, [])
-                 if course_id in prereqs: # If this course_id is a prereq for other_course_id
-                      dependency_count[course_id] += 1 # Increment its dependency count
+                 if course_id in prereqs:
+                      dependency_count[course_id] += 1
 
         # --- 7. Filter Courses for the Student ---
         available_courses = []
@@ -1531,6 +1559,7 @@ def get_form_courses(decoded_token):
         return jsonify({
             "form_id": form_id,
             "plan_id": plan_id,
+            "max_graduate_hours": max_graduate_hours_from_form, # *** Added field ***
             "available_courses": available_courses,
             "recommended_courses": recommended_courses,
             "unavailable_due_to_prerequisites": unavailable_prereqs,
@@ -1545,6 +1574,7 @@ def get_form_courses(decoded_token):
         print(f"Error in /getFormCourses for form {form_id_local}, user {uid_local}: {e}")
         traceback.print_exc() # Print detailed traceback for debugging
         return jsonify({"error": "Failed to retrieve form courses due to an internal server error", "details": str(e)}), 500
+
 
 @app.route('/addFormResponse', methods=['POST'])
 @token_required # Student needs to be logged in
