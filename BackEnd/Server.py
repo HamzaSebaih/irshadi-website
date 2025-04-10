@@ -450,18 +450,6 @@ def add_course_prerequisite(decoded_token): # The admin_required decorator injec
         # Return a generic server error message
         return jsonify({"error": "Failed to add course prerequisite due to an internal server error", "details": str(e)}), 500
 
-@app.route('/delete/<user_id>', methods=['DELETE'])
-@admin_required
-def delete_data(user_id, decoded_token):#WIP
-     #NOTE Goal: deleting a user document from the Students/Admins Collection collections
-     #NOTE WIP
-    try:
-        # Delete the document
-        
-        return jsonify({"message": "Data deleted successfully!"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/addSurvey', methods=['POST'])
 @admin_required
 def add_Survey(decoded_token):#WIP Structure
@@ -1030,6 +1018,49 @@ def edit_form(decoded_token): # admin_required provides decoded_token
         print(f"Error in /editForm for form_id '{form_id if 'form_id' in locals() else 'unknown'}': {e}")
         # Return a generic server error message
         return jsonify({"error": "Failed to edit form due to an internal server error", "details": str(e)}), 500
+
+@app.route('/deleteForm', methods=['POST'])
+@admin_required 
+def delete_form(decoded_token):
+    """
+    Deletes a specific form document from the 'Forms' collection.
+    Requires admin authentication.
+    Expects the form_id in the JSON request body: {"form_id": "FORM_ID"}
+    """
+    try:
+        # --- 1. Get form_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+
+        # Validate form_id
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+        form_id = form_id.strip()
+        # --- End form_id retrieval ---
+
+        # --- 2. Get Document Reference and Check Existence ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+
+        if not form_doc.exists:
+             # If the document doesn't exist, return 404 Not Found
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+
+        # --- 3. Delete the Document ---
+        form_ref.delete()
+
+        # --- 4. Return Success Response ---
+        # Return 200 OK on successful deletion
+        return jsonify({"message": f"Form '{form_id}' deleted successfully"}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /deleteForm for form_id {form_id_local}: {e}")
+        # Return a generic server error message
+        return jsonify({"error": "Failed to delete form due to an internal server error", "details": str(e)}), 500
 
 def get_form_statistics(decoded_token):
     #this will show the form statistics, 
