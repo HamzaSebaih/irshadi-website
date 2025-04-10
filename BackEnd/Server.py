@@ -1499,7 +1499,8 @@ def add_form_response(decoded_token):
     Checks if the form exists and is currently active.
     Validates that the total hours of selected courses do not exceed the limit
     (max_hours or max_graduate_hours based on student's progress).
-    Stores the response in the form document under Form_Responses.[USER_ID].
+    Stores the response in the form document under Form_Responses.[USER_ID],
+    including a flag indicating if the graduate hour limit was applicable.
     """
     try:
         # --- 1. Get Input and User ID ---
@@ -1588,13 +1589,10 @@ def add_form_response(decoded_token):
                         found_hours_count += 1
                     else:
                         print(f"Warning: Course {course_doc.id} has invalid/missing 'hours'.")
-                        # Decide: return error or ignore course? Returning error for safety.
                         return jsonify({"error": f"Configuration error for course '{course_doc.id}' (invalid hours)."}), 500
                 else:
-                    # A selected course doesn't exist in the Courses collection
                     return jsonify({"error": f"Selected course '{course_doc.id}' not found."}), 400
 
-            # Double-check if all selected courses were found (optional)
             if found_hours_count != len(selected_courses):
                  return jsonify({"error": "One or more selected courses could not be verified."}), 400
 
@@ -1606,7 +1604,7 @@ def add_form_response(decoded_token):
         remaining_hours = required_hours_for_plan - achieved_hours
 
         # Check if student is considered graduating for hour limit purposes
-        is_graduating = (remaining_hours <= max_graduate_hours)
+        is_graduating = (remaining_hours <= max_graduate_hours) # This boolean is calculated here
         applicable_limit = max_graduate_hours if is_graduating else max_hours
         limit_type = "graduate" if is_graduating else "standard"
 
@@ -1619,8 +1617,9 @@ def add_form_response(decoded_token):
         # --- 7. Prepare and Store Response ---
         response_data = {
             "selected_courses": selected_courses,
-            "total_hours": total_selected_hours, # Store calculated hours
-            "submitted_at": current_time
+            "total_hours": total_selected_hours,
+            "submitted_at": current_time,
+            "is_graduating": is_graduating # *** Added the boolean flag here ***
         }
         update_payload = {
             f'Form_Responses.{uid}': response_data,
