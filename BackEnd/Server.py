@@ -1091,6 +1091,95 @@ def delete_plan(decoded_token):
         # Return a generic server error message
         return jsonify({"error": "Failed to delete form due to an internal server error", "details": str(e)}), 500
 
+@app.route('/deleteCourseFromPlan', methods=['POST']) # Using POST for consistency
+@admin_required
+def delete_course_from_plan(decoded_token):
+    """
+    Deletes a specific course_id from a level's list within a plan document.
+    Requires admin authentication.
+    Expects JSON: {"plan_id": "PLAN_ID", "level_identifier": LEVEL_NUMBER | "Extra", "course_id": "COURSE_ID_TO_DELETE"}
+    Uses ArrayRemove for safe removal. Updates 'last_update_date'.
+    """
+    try:
+        # --- 1. Get Input from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+
+        plan_id = data.get('plan_id')
+        level_identifier = data.get('level_identifier')
+        course_id_to_delete = data.get('course_id')
+
+        # Validate inputs
+        if not plan_id or not isinstance(plan_id, str) or not plan_id.strip():
+            return jsonify({"error": "Missing or invalid 'plan_id'"}), 400
+        if level_identifier is None: # Check presence before type check
+             return jsonify({"error": "Missing 'level_identifier'"}), 400
+        if not course_id_to_delete or not isinstance(course_id_to_delete, str) or not course_id_to_delete.strip():
+            return jsonify({"error": "Missing or invalid 'course_id'"}), 400
+
+        plan_id = plan_id.strip()
+        course_id_to_delete = course_id_to_delete.strip()
+
+        # --- Construct level_key from level_identifier ---
+        level_key = None
+        if isinstance(level_identifier, int) and level_identifier > 0:
+            level_key = f"Level {level_identifier}"
+        elif isinstance(level_identifier, str) and level_identifier.strip().lower() == "extra":
+            level_key = "Extra"
+        else:
+            return jsonify({"error": "'level_identifier' must be a positive integer or the string 'Extra'"}), 400
+
+        # --- 2. Get Plan Document Reference and Check Existence ---
+        plan_ref = db.collection('Plans').document(plan_id)
+        plan_doc = plan_ref.get()
+
+        if not plan_doc.exists:
+             return jsonify({"error": f"Plan '{plan_id}' not found"}), 404
+
+        # --- 3. Check if Level and Course Exist within the Plan ---
+        plan_data = plan_doc.to_dict()
+        levels_map = plan_data.get('levels', {})
+
+        if level_key not in levels_map:
+             return jsonify({"error": f"Level '{level_key}' not found in plan '{plan_id}'"}), 404
+        if not isinstance(levels_map.get(level_key), list):
+             return jsonify({"error": f"Field for level '{level_key}' in plan '{plan_id}' is not a list."}), 409 # Conflict - wrong type
+
+        # Check if the course to delete is actually in the list for that level
+        if course_id_to_delete not in levels_map.get(level_key, []):
+             return jsonify({"error": f"Course '{course_id_to_delete}' not found in level '{level_key}' of plan '{plan_id}'."}), 404
+
+        # --- 4. Prepare Update Payload with ArrayRemove ---
+        update_payload = {
+            # Use dot notation and ArrayRemove to remove the specific course ID
+            f'levels.{level_key}': firestore.ArrayRemove([course_id_to_delete]),
+            'last_update_date': datetime.now(timezone.utc) # Update timestamp
+        }
+
+        # --- 5. Update the Document ---
+        plan_ref.update(update_payload)
+
+        # --- 6. Return Success Response ---
+        return jsonify({
+            "message": f"Course '{course_id_to_delete}' deleted successfully from level '{level_key}' in plan '{plan_id}'."
+        }), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        plan_id_local = plan_id if 'plan_id' in locals() else 'unknown'
+        level_key_local = level_key if 'level_key' in locals() else 'unknown'
+        course_id_local = course_id_to_delete if 'course_id_to_delete' in locals() else 'unknown'
+        print(f"Error in /deleteCourseFromPlan for plan {plan_id_local}, level {level_key_local}, course {course_id_local}: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to delete course from plan due to an internal server error", "details": str(e)}), 500
+
+
+
+
+
 def get_form_statistics(decoded_token):
     #this will show the form statistics, 
     None
