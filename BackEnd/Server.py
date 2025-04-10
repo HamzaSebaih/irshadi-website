@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import collections # For defaultdict
+import traceback # For detailed error logging
 #End of Importing Section ___________
 
 load_dotenv() # Load environment variables (optional, for production)
@@ -778,8 +779,9 @@ def add_form(decoded_token): # admin_required provides decoded_token
     Requires admin privileges.
     Expects JSON: {"title": "...", "description": "...", "start_date": "YYYY-MM-DD",
                    "end_date": "YYYY-MM-DD", "plan": "PLAN_ID",
-                   "max_hours": NUMBER, "max_graduate_hours": NUMBER}
-    Initializes an empty 'Form_Responses' map (changed from list).
+                   "max_hours": NUMBER, "max_graduate_hours": NUMBER,
+                   "expected_students": NUMBER}
+    Initializes an empty 'Form_Responses' map.
     """
     try:
         # --- 1. Get and Validate Input ---
@@ -788,7 +790,8 @@ def add_form(decoded_token): # admin_required provides decoded_token
              return jsonify({"error": "Missing JSON request body"}), 400
 
         # Updated required fields
-        required_fields = ["title", "description", "start_date", "end_date", "plan", "max_hours", "max_graduate_hours"]
+        required_fields = ["title", "description", "start_date", "end_date", "plan",
+                           "max_hours", "max_graduate_hours", "expected_students"] # Added expected_students
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
             return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
@@ -798,33 +801,33 @@ def add_form(decoded_token): # admin_required provides decoded_token
         start_date_str = data.get('start_date')
         end_date_str = data.get('end_date')
         plan_id = data.get('plan')
-        max_hours = data.get('max_hours') # New field
-        max_graduate_hours = data.get('max_graduate_hours') # New field
+        max_hours = data.get('max_hours')
+        max_graduate_hours = data.get('max_graduate_hours')
+        expected_students = data.get('expected_students') # New field
 
         # Basic type validation for original string fields
         if not all(isinstance(data.get(field), str) for field in ["title", "description", "start_date", "end_date", "plan"]):
              return jsonify({"error": "Fields 'title', 'description', 'start_date', 'end_date', 'plan' must be strings"}), 400
 
-        # --- Validate new hour limit fields ---
+        # Validate hour limit fields
         if not isinstance(max_hours, int) or max_hours <= 0:
              return jsonify({"error": "'max_hours' must be a positive integer"}), 400
         if not isinstance(max_graduate_hours, int) or max_graduate_hours <= 0:
              return jsonify({"error": "'max_graduate_hours' must be a positive integer"}), 400
-        # --- End hour limit validation ---
 
-        # Validate date strings and convert to datetime objects (assuming YYYY-MM-DD format)
+        # --- Validate expected_students (NEW) ---
+        if not isinstance(expected_students, int) or expected_students < 0:
+             return jsonify({"error": "'expected_students' must be a non-negative integer"}), 400
+        # --- End expected_students validation ---
+
+        # Validate date strings and convert to datetime objects
         try:
-            # Combine date with minimum time for Timestamp conversion
             start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d")
             end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d")
-
             if end_datetime < start_datetime:
                  return jsonify({"error": "'end_date' cannot be before 'start_date'"}), 400
-
-            # Convert to Firestore Timestamps (UTC is recommended)
             start_timestamp = datetime.combine(start_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
             end_timestamp = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
-
         except ValueError:
             return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD"}), 400
 
@@ -834,7 +837,7 @@ def add_form(decoded_token): # admin_required provides decoded_token
              return jsonify({"error": f"Associated plan '{plan_id}' not found"}), 404
 
         # --- 2. Generate Sequential ID ---
-        # WARNING: This method can be inefficient and prone to race conditions under high load.
+        # WARNING: This method can be inefficient and prone to race conditions.
         forms_ref = db.collection('Forms')
         forms_stream = forms_ref.stream()
         max_id = 0
@@ -856,9 +859,10 @@ def add_form(decoded_token): # admin_required provides decoded_token
             "start_date": start_timestamp,
             "end_date": end_timestamp,
             "plan_id": plan_id,
-            "max_hours": max_hours,                 # Added field
-            "max_graduate_hours": max_graduate_hours, # Added field
-            "Form_Responses": {}, # Initialize empty MAP for responses (more practical)
+            "max_hours": max_hours,
+            "max_graduate_hours": max_graduate_hours,
+            "expected_students": expected_students, # Added field
+            "Form_Responses": {}, # Initialize empty MAP
             "created_at": datetime.now(timezone.utc)
         }
 
@@ -1347,11 +1351,14 @@ def get_form_courses(decoded_token):
     """
     Retrieves courses associated with a specific form, filtered for the calling student.
     Requires user authentication. Expects form_id in the JSON request body.
+    VALIDATES that the student's record was updated AFTER the form's start date.
     Returns lists of available, unavailable (prereqs not met), unavailable (finished),
     recommended courses, AND the student's previously selected courses for this form, if any.
     Recommendations prioritize 'important' courses (prerequisites for others)
     from the earliest available level. Includes fallback logic.
     """
+    form_id = None # Initialize for error logging
+    uid = None # Initialize for error logging
     try:
         # --- Get form_id from JSON Body ---
         data = request.get_json()
@@ -1363,45 +1370,67 @@ def get_form_courses(decoded_token):
         form_id = form_id.strip()
         # --- End form_id retrieval ---
 
-        # --- 1. Get Student UID and Finished Courses ---
+        # --- 1. Get Student UID and Data ---
         uid = decoded_token.get('uid')
         if not uid:
-             return jsonify({"error": "UID not found in token"}), 400
+            return jsonify({"error": "UID not found in token"}), 400
 
         student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
         if not student_doc.exists:
-             return jsonify({"error": "Student profile not found"}), 404
+            return jsonify({"error": "Student profile not found"}), 404
 
         student_data = student_doc.to_dict()
         # Use a set for efficient prerequisite checking
         finished_courses_set = set(student_data.get('Finished_Courses', []))
+        student_last_updated = student_data.get('last_updated') # Get student's last update time
 
-        # --- 2. Get Form, associated Plan ID, and Previous Response ---
+        # --- 2. Get Form Data ---
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
         if not form_doc.exists:
-             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+            return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
         form_data = form_doc.to_dict()
         plan_id = form_data.get('plan_id')
-        if not plan_id:
-             return jsonify({"error": f"Form '{form_id}' does not have an associated plan_id"}), 400
+        form_start_date = form_data.get('start_date') # Get form start date
 
-        # --- Get previously selected courses (NEW) ---
+        if not plan_id:
+            return jsonify({"error": f"Form '{form_id}' does not have an associated plan_id"}), 400
+        # Ensure form_start_date is a datetime object (Timestamp from Firestore)
+        if not isinstance(form_start_date, datetime):
+            print(f"Warning: Form {form_id} has invalid/missing 'start_date'. Type: {type(form_start_date)}")
+            return jsonify({"error": "Form configuration is incomplete or invalid (start_date)."}), 500
+
+        # --- 2b. Validate Student Data Freshness (NEW STEP) ---
+        # Ensure student_last_updated is a datetime object
+        if not isinstance(student_last_updated, datetime):
+            # Student record has never been updated by the extension or has invalid data
+            return jsonify({"error": "Please update your academic record using the extension before accessing this form."}), 403 # 403 Forbidden
+
+        # Ensure timestamps are comparable (make them timezone-aware, assuming UTC if missing)
+        # Firestore Timestamps are typically already timezone-aware (UTC)
+        form_start_date_utc = form_start_date.replace(tzinfo=timezone.utc) if form_start_date.tzinfo is None else form_start_date
+        student_last_updated_utc = student_last_updated.replace(tzinfo=timezone.utc) if student_last_updated.tzinfo is None else student_last_updated
+
+        if student_last_updated_utc <= form_start_date_utc:
+            # Student data is older than or same time as form start date, require update
+            return jsonify({"error": "Your academic record is outdated relative to this form. Please update it using the extension."}), 403 # 403 Forbidden
+        # --- End Freshness Check ---
+
+
+        # --- 3. Get Previous Response ---
         previously_selected_courses = []
-        form_responses_map = form_data.get('Form_Responses', {}) # Get the responses map safely
-        if isinstance(form_responses_map, dict): # Ensure it's a map
-            student_previous_response = form_responses_map.get(uid) # Get this student's entry
-            if isinstance(student_previous_response, dict): # Ensure the entry is a map
-                # Get the list, default to empty list if key missing or not a list
+        form_responses_map = form_data.get('Form_Responses', {})
+        if isinstance(form_responses_map, dict):
+            student_previous_response = form_responses_map.get(uid)
+            if isinstance(student_previous_response, dict):
                 courses = student_previous_response.get('selected_courses', [])
                 if isinstance(courses, list):
                      previously_selected_courses = courses
-        # --- End getting previous selection ---
 
 
-        # --- 3. Get Plan Structure ---
+        # --- 4. Get Plan Structure ---
         plan_ref = db.collection('Plans').document(plan_id)
         plan_doc = plan_ref.get()
         if not plan_doc.exists:
@@ -1412,46 +1441,48 @@ def get_form_courses(decoded_token):
         if not levels_map:
              return jsonify({"error": f"Plan '{plan_id}' has no levels defined"}), 400
 
-        # --- 4. Extract All Courses from Plan & Store Level Info ---
-        all_plan_courses_with_level = [] # Store tuples (course_id, level_key)
-        level_order = {} # Store numeric order for sorting levels
+        # --- 5. Extract All Courses from Plan & Store Level Info ---
+        all_plan_courses_with_level = []
+        level_order = {}
         level_counter = 1
-        # Sort level keys based on assumed numeric prefix or place 'Extra' last
         sorted_level_keys = sorted(levels_map.keys(), key=lambda k: int(k.split(' ')[1]) if k.startswith('Level ') and k.split(' ')[1].isdigit() else float('inf'))
 
         for level_key in sorted_level_keys:
             courses = levels_map[level_key]
-            if not isinstance(courses, list): continue # Skip if not a list
-            level_order[level_key] = level_counter # Assign order based on sorted keys
+            if not isinstance(courses, list): continue
+            level_order[level_key] = level_counter
             level_counter += 1
             for course_id in courses:
-                 if isinstance(course_id, str): # Ensure course_id is a string
+                 if isinstance(course_id, str):
                       all_plan_courses_with_level.append((course_id, level_key))
 
-        all_plan_course_ids = list(set(c[0] for c in all_plan_courses_with_level)) # Unique course IDs
+        all_plan_course_ids = list(set(c[0] for c in all_plan_courses_with_level))
 
-        # --- 5. Fetch Prerequisites for All Plan Courses ---
-        course_prereqs = collections.defaultdict(list) # {course_id: [prereq1,...]}
-        course_refs_to_get = [db.collection('Courses').document(cid) for cid in all_plan_course_ids]
-        course_docs = db.get_all(course_refs_to_get) # Use batch fetching
+        # --- 6. Fetch Prerequisites for All Plan Courses ---
+        course_prereqs = collections.defaultdict(list)
+        if all_plan_course_ids: # Only fetch if there are courses in the plan
+             course_refs_to_get = [db.collection('Courses').document(cid) for cid in all_plan_course_ids]
+             course_docs = db.get_all(course_refs_to_get)
 
-        for course_doc in course_docs:
-             if course_doc.exists:
-                  course_id = course_doc.id
-                  course_data = course_doc.to_dict()
-                  prereqs = course_data.get('prerequisites', [])
-                  if isinstance(prereqs, list):
-                       course_prereqs[course_id] = prereqs
+             for course_doc in course_docs:
+                  if course_doc.exists:
+                       course_id = course_doc.id
+                       course_data = course_doc.to_dict()
+                       prereqs = course_data.get('prerequisites', [])
+                       if isinstance(prereqs, list):
+                            course_prereqs[course_id] = prereqs
 
-        # --- 5b. Calculate Dependency Count ---
+        # --- 6b. Calculate Dependency Count ---
         dependency_count = collections.defaultdict(int)
-        for course_id in all_plan_course_ids: # Iterate through all courses in the plan
-            # Check the prerequisites defined FOR OTHER courses
-            for other_course_id, prereqs in course_prereqs.items():
+        for course_id in all_plan_course_ids:
+            # Check the prerequisites defined FOR OTHER courses in the plan
+            for other_course_id in all_plan_course_ids:
+                 if other_course_id == course_id: continue # Don't check self
+                 prereqs = course_prereqs.get(other_course_id, [])
                  if course_id in prereqs: # If this course_id is a prereq for other_course_id
                       dependency_count[course_id] += 1 # Increment its dependency count
 
-        # --- 6. Filter Courses for the Student ---
+        # --- 7. Filter Courses for the Student ---
         available_courses = []
         unavailable_prereqs = []
         unavailable_finished = []
@@ -1459,9 +1490,8 @@ def get_form_courses(decoded_token):
         for course_id in all_plan_course_ids:
             if course_id in finished_courses_set:
                  unavailable_finished.append(course_id)
-                 continue # Skip further checks if already finished
+                 continue
 
-            # Check prerequisites
             prereqs_for_course = set(course_prereqs.get(course_id, []))
             if prereqs_for_course.issubset(finished_courses_set):
                  available_courses.append(course_id)
@@ -1470,38 +1500,34 @@ def get_form_courses(decoded_token):
                  unavailable_prereqs.append({"course_id": course_id, "missing": missing_prereqs})
 
 
-        # --- 7. Recommendation Logic with Fallback ---
+        # --- 8. Recommendation Logic with Fallback ---
         recommended_courses = []
         min_level_num = float('inf')
-        available_courses_set = set(available_courses) # For quick lookup
+        available_courses_set = set(available_courses)
 
-        # Find the minimum level order number that has available courses
-        if available_courses: # Only calculate min_level if there are available courses
+        if available_courses:
             for course_id, level_key in all_plan_courses_with_level:
                  if course_id in available_courses_set:
                       level_num = level_order.get(level_key, float('inf'))
                       min_level_num = min(min_level_num, level_num)
 
-        # Primary recommendation: Add available courses from that minimum level order IF they are prerequisites for others
         if min_level_num != float('inf'):
              for course_id, level_key in all_plan_courses_with_level:
                   if (course_id in available_courses_set and
                           level_order.get(level_key) == min_level_num and
-                          dependency_count.get(course_id, 0) > 0): # Check dependency count
+                          dependency_count.get(course_id, 0) > 0):
                        recommended_courses.append(course_id)
 
-        recommended_courses = list(set(recommended_courses)) # Remove duplicates from primary logic
+        recommended_courses = list(set(recommended_courses))
 
-        # --- Fallback Recommendation Logic ---
         if not recommended_courses and available_courses:
             print(f"INFO: No important courses found in earliest level ({min_level_num}). Falling back to highest dependency available courses.")
             available_with_deps = [(c_id, dependency_count.get(c_id, 0)) for c_id in available_courses]
             available_with_deps.sort(key=lambda item: item[1], reverse=True)
             recommended_courses = [item[0] for item in available_with_deps]
-        # --- End Fallback ---
 
 
-        # --- 8. Return Response ---
+        # --- 9. Return Response --- (Renumbered from 8)
         return jsonify({
             "form_id": form_id,
             "plan_id": plan_id,
@@ -1509,14 +1535,14 @@ def get_form_courses(decoded_token):
             "recommended_courses": recommended_courses,
             "unavailable_due_to_prerequisites": unavailable_prereqs,
             "unavailable_due_to_completion": unavailable_finished,
-            "previously_selected_courses": previously_selected_courses # Added previously selected
+            "previously_selected_courses": previously_selected_courses
         }), 200
 
     except Exception as e:
-        uid_local = decoded_token.get('uid', 'unknown')
-        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        # Log error with more context if available
+        uid_local = uid if 'uid' in locals() and uid else 'unknown'
+        form_id_local = form_id if 'form_id' in locals() and form_id else 'unknown'
         print(f"Error in /getFormCourses for form {form_id_local}, user {uid_local}: {e}")
-        import traceback
         traceback.print_exc() # Print detailed traceback for debugging
         return jsonify({"error": "Failed to retrieve form courses due to an internal server error", "details": str(e)}), 500
 
