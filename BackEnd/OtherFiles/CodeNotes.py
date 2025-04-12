@@ -113,3 +113,13 @@ DocumentReference: Use it to write (set), read (get), or update a document.
 DocumentSnapshot: Use it to read the data (.to_dict()) or check the ID (.id).
 
 """
+
+
+# the command to setup your environemnets packages is: " pip install Flask Flask-Cors firebase-admin python-dotenv beautifulsoup4 google-generativeai requests"
+#create a virtual env , then enter it and install the dependencies 
+#py -3.12 -m venv my_project_env , you will run this at the project folder , which will 
+#use py short for python, and put the version you have, then use the module venv to create a virtual enviroment
+# named "my_project_env", name it whatever , backend_env or whatever, then after that 
+#enter the environemnt or from visual studio press ctrl shift P , and choose your enviorment
+#then open a terminal and start installing the dependencies, and don't forget to create a .env inside the 
+#backend folder , where you have "GEMINI_API_KEY" attribute and its value will be my key. I put in discord.
