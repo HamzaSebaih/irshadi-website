@@ -7,14 +7,17 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from functools import wraps
 import os
+import math
 import random
 import string
 import datetime 
-from datetime import datetime, timezone, timedelta
+import json
+from datetime import datetime, time, timezone, timedelta
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import collections # For defaultdict
 import traceback # For detailed error logging
+from google import genai
 #End of Importing Section ___________
 
 load_dotenv() # Load environment variables (optional, for production)
@@ -219,6 +222,47 @@ def generate_code(decoded_token):
     # Return the code to the frontend
     return jsonify({"code": code}), 200
 
+def generate_time_slots():
+    """Generates lists of valid 50-min and 80-min time slots."""
+    slots_50_min = []
+    slots_80_min = []
+    days_50 = ["Sunday", "Tuesday", "Thursday"]
+    days_80 = ["Monday", "Wednesday"]
+    break_start = time(12, 0)
+    break_end = time(13, 0)
+    end_of_day = time(22, 0) # 10 PM
+
+    # Generate 50-min slots (Sun, Tue, Thu)
+    for day in days_50:
+        current_time = time(9, 0)
+        while current_time < end_of_day:
+            slot_end_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=50)).time()
+            if current_time < break_start and slot_end_time > break_start:
+                 current_time = break_end; continue
+            if current_time >= break_start and current_time < break_end:
+                 current_time = break_end; continue
+            if slot_end_time > end_of_day: break
+            slots_50_min.append({"day": day, "start": current_time.strftime("%H:%M"), "end": slot_end_time.strftime("%H:%M")})
+            current_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=60)).time()
+
+    # Generate 80-min slots (Mon, Wed)
+    for day in days_80:
+        current_time = time(9, 0)
+        while current_time < end_of_day:
+            slot_end_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=80)).time()
+            if current_time < break_start and slot_end_time > break_start:
+                 current_time = break_end; continue
+            if current_time >= break_start and current_time < break_end:
+                 current_time = break_end; continue
+            if slot_end_time > end_of_day: break
+            slots_80_min.append({"day": day, "start": current_time.strftime("%H:%M"), "end": slot_end_time.strftime("%H:%M")})
+            current_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=90)).time()
+
+    return slots_50_min, slots_80_min
+# --- End Helper Function ---
+
+
+
 #End Of General Functions Section _______________
 
 #Admin Functions Section _______________
@@ -380,17 +424,20 @@ def add_course_prerequisite(decoded_token): # The admin_required decorator injec
     within the 'Courses' collection.
     Requires admin privileges.
     Expects JSON: {"course_id": "TARGET-COURSE-ID", "prerequisite": "PREREQ-COURSE-ID"}
+    Verifies that both courses exist and that adding this prerequisite does not create
+    a direct circular dependency (e.g., A requires B and B requires A).
     Uses ArrayUnion for safe addition (won't add duplicates).
-    Verifies that both the target course and the prerequisite course exist.
     """
+    course_id = None # Initialize for error logging
+    prerequisite_id = None # Initialize for error logging
     try:
         # --- 1. Get and Validate Input ---
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
 
-        course_id = data.get('course_id')         # The course to add the prerequisite to
-        prerequisite_id = data.get('prerequisite') # The course ID that is the prerequisite
+        course_id = data.get('course_id')         # The course to add the prerequisite to (e.g., Course B)
+        prerequisite_id = data.get('prerequisite') # The course ID that is the prerequisite (e.g., Course A)
 
         # Basic validation
         if not course_id or not isinstance(course_id, str) or not course_id.strip():
@@ -407,49 +454,136 @@ def add_course_prerequisite(decoded_token): # The admin_required decorator injec
 
         # --- 2. Verify Both Courses Exist ---
         # NOTE: Assumes 'Courses' is the correct collection name.
-        course_ref = db.collection('Courses').document(course_id)
-        prereq_ref = db.collection('Courses').document(prerequisite_id)
+        course_ref = db.collection('Courses').document(course_id)         # Ref for Course B
+        prereq_ref = db.collection('Courses').document(prerequisite_id) # Ref for Course A
 
-        course_doc = course_ref.get()
-        prereq_doc = prereq_ref.get() # Check if prerequisite course also exists
+        course_doc = course_ref.get() # Doc for Course B
+        prereq_doc = prereq_ref.get() # Doc for Course A (the prerequisite being added)
 
         if not course_doc.exists:
              return jsonify({"error": f"Target course '{course_id}' not found in Courses collection"}), 404
         if not prereq_doc.exists:
-             # It's important that prerequisites refer to actual courses
-             return jsonify({"error": f"Prerequisite course '{prerequisite_id}' not found in Courses collection"}), 400 # 400 Bad Request as the input refers to a non-existent entity
+             return jsonify({"error": f"Prerequisite course '{prerequisite_id}' not found in Courses collection"}), 400 # 400 Bad Request
 
-        # --- 3. Check Target Course's 'prerequisites' Field (Optional but Recommended) ---
+        # --- 2b. Check for Circular Dependency (NEW STEP) ---
+        # Check if Course B (course_id) is already a prerequisite for Course A (prerequisite_id)
+        prereq_data = prereq_doc.to_dict()
+        prereqs_of_prereq = prereq_data.get('prerequisites', []) # Get Course A's prerequisites
+        if isinstance(prereqs_of_prereq, list) and course_id in prereqs_of_prereq:
+            # If Course B is in Course A's prerequisites, adding A to B's prereqs would create a loop.
+            return jsonify({
+                "error": f"Circular prerequisite detected: '{course_id}' is already listed as a prerequisite for '{prerequisite_id}'. Cannot add '{prerequisite_id}' as a prerequisite for '{course_id}'."
+            }), 409 # 409 Conflict is appropriate here
+
+        # --- 3. Check Target Course's 'prerequisites' Field ---
         course_data = course_doc.to_dict()
-        # Check if the field exists and if it's a list before attempting ArrayUnion
-        # ArrayUnion *might* create the field if it doesn't exist, but explicit checks are safer.
         if 'prerequisites' in course_data and not isinstance(course_data.get('prerequisites'), list):
-             return jsonify({"error": f"Field 'prerequisites' in course '{course_id}' exists but is not an array/list."}), 409 # 409 Conflict - field type mismatch
+             return jsonify({"error": f"Field 'prerequisites' in course '{course_id}' exists but is not an array/list."}), 409 # 409 Conflict
 
         # --- 4. Add Prerequisite using ArrayUnion ---
-        # Prepare the update data. ArrayUnion will handle adding the prerequisite_id
-        # only if it's not already present in the 'prerequisites' array.
-        # It will also create the 'prerequisites' field if it doesn't exist yet.
+        # Prepare the update data.
         update_data = {
+            # Add prerequisite_id (Course A) to course_id's (Course B) list
             'prerequisites': firestore.ArrayUnion([prerequisite_id])
-            # Optional: You might want to update a 'last_modified' timestamp here as well
+            # Optional: Update a 'last_modified' timestamp
             # 'last_modified': datetime.now(timezone.utc)
         }
 
-        # Update the target course document
+        # Update the target course document (Course B)
         course_ref.update(update_data)
 
         # --- 5. Return Success Response ---
-        # Note: ArrayUnion succeeds even if the item was already present.
         return jsonify({
             "message": f"Prerequisite '{prerequisite_id}' added to course '{course_id}' (or was already present)."
             }), 200 # 200 OK
 
     except Exception as e:
         # Log the error for server-side debugging
-        print(f"Error in /addCoursePre for course '{course_id if 'course_id' in locals() else 'unknown'}', prerequisite '{prerequisite_id if 'prerequisite_id' in locals() else 'unknown'}': {e}")
+        course_id_local = course_id if 'course_id' in locals() else 'unknown'
+        prereq_id_local = prerequisite_id if 'prerequisite_id' in locals() else 'unknown'
+        print(f"Error in /addCoursePre for course '{course_id_local}', prerequisite '{prereq_id_local}': {e}")
+        traceback.print_exc()
         # Return a generic server error message
         return jsonify({"error": "Failed to add course prerequisite due to an internal server error", "details": str(e)}), 500
+
+@app.route('/deleteCoursePre', methods=['POST']) # Using POST for consistency
+@admin_required
+def delete_course_prerequisite(decoded_token): # The admin_required decorator injects decoded_token
+    """
+    Deletes a prerequisite course ID from the 'prerequisites' array of a target course document
+    within the 'Courses' collection.
+    Requires admin privileges.
+    Expects JSON: {"course_id": "TARGET-COURSE-ID", "prerequisite_id": "PREREQ-TO-DELETE-ID"}
+    Uses ArrayRemove for safe removal. Checks if prerequisite exists before removal.
+    """
+    course_id = None # Initialize for error logging
+    prerequisite_id_to_delete = None # Initialize for error logging
+    try:
+        # --- 1. Get and Validate Input ---
+        data = request.get_json()
+        if not data:
+             return jsonify({"error": "Missing JSON request body"}), 400
+
+        course_id = data.get('course_id') # The course to modify
+        prerequisite_id_to_delete = data.get('prerequisite_id') # The prerequisite to remove
+
+        # Basic validation
+        if not course_id or not isinstance(course_id, str) or not course_id.strip():
+            return jsonify({"error": "Missing or invalid 'course_id' (must be a non-empty string)"}), 400
+        if not prerequisite_id_to_delete or not isinstance(prerequisite_id_to_delete, str) or not prerequisite_id_to_delete.strip():
+            return jsonify({"error": "Missing or invalid 'prerequisite_id' (must be a non-empty string)"}), 400
+
+        course_id = course_id.strip()
+        prerequisite_id_to_delete = prerequisite_id_to_delete.strip()
+
+        # --- 2. Verify Target Course Exists ---
+        # NOTE: Assumes 'Courses' is the correct collection name.
+        course_ref = db.collection('Courses').document(course_id)
+        course_doc = course_ref.get()
+
+        if not course_doc.exists:
+             return jsonify({"error": f"Target course '{course_id}' not found in Courses collection"}), 404
+
+        # --- 3. Check if Prerequisite Exists in the List ---
+        course_data = course_doc.to_dict()
+        current_prereqs = course_data.get('prerequisites', [])
+
+        # Ensure the prerequisites field is actually a list
+        if not isinstance(current_prereqs, list):
+             return jsonify({"error": f"Field 'prerequisites' in course '{course_id}' is not an array/list."}), 409 # Conflict
+
+        # Check if the prerequisite to delete is actually in the current list
+        if prerequisite_id_to_delete not in current_prereqs:
+             return jsonify({
+                 "error": f"Prerequisite '{prerequisite_id_to_delete}' not found in the prerequisites list for course '{course_id}'."
+             }), 404 # Not Found
+
+        # --- 4. Remove Prerequisite using ArrayRemove ---
+        # Prepare the update data. ArrayRemove handles removing the specific element.
+        update_data = {
+            'prerequisites': firestore.ArrayRemove([prerequisite_id_to_delete]),
+            # Optional: Update a 'last_modified' timestamp
+            'last_modified': datetime.now(timezone.utc)
+        }
+
+        # Update the target course document
+        course_ref.update(update_data)
+
+        # --- 5. Return Success Response ---
+        # Note: ArrayRemove succeeds even if the item wasn't present,
+        # but we added an explicit check above (Step 3) for better feedback.
+        return jsonify({
+            "message": f"Prerequisite '{prerequisite_id_to_delete}' removed successfully from course '{course_id}'."
+            }), 200 # 200 OK
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        course_id_local = course_id if 'course_id' in locals() else 'unknown'
+        prereq_id_local = prerequisite_id_to_delete if 'prerequisite_id_to_delete' in locals() else 'unknown'
+        print(f"Error in /deleteCoursePre for course '{course_id_local}', prerequisite '{prereq_id_local}': {e}")
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to delete course prerequisite due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getCourses', methods=['GET'])
 @admin_required
@@ -632,49 +766,52 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
 def add_course_to_plan_level(decoded_token): # The admin_required decorator injects decoded_token
     """
     Adds a course ID to the array associated with a specific level within a plan document's 'levels' map.
+    If the course already exists in a different level within the same plan, it is removed
+    from the old level first (effectively moving the course).
     Requires admin privileges.
     Expects JSON: {"plan_name": "PlanName", "level_identifier": LEVEL_NUMBER | "Extra", "course_id": "COURSE-ID"}
     Updates the 'last_update_date' field of the plan.
-    Uses ArrayUnion for safe addition (won't add duplicates).
+    Uses ArrayUnion/ArrayRemove for safe operations.
     """
+    plan_name = None # Initialize for error logging
+    level_identifier = None # Initialize for error logging
+    course_id = None # Initialize for error logging
     try:
         # --- 1. Get and Validate Input ---
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
 
-        plan_name = data.get('plan_name')#it
-        # Renamed input field to accept number or "Extra"
-        level_identifier = data.get('level_identifier')# 4
-        course_id = data.get('course_id') # e.g., "CPIT-251"
+        plan_name = data.get('plan_name')
+        level_identifier = data.get('level_identifier')
+        course_id = data.get('course_id') # Course to add/move
 
-        # Basic validation for plan_name and course_id
+        # Basic validation
         if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
-            return jsonify({"error": "Missing or invalid 'plan_name' (must be a non-empty string)"}), 400
+            return jsonify({"error": "Missing or invalid 'plan_name'"}), 400
+        if level_identifier is None:
+             return jsonify({"error": "Missing 'level_identifier'"}), 400
         if not course_id or not isinstance(course_id, str) or not course_id.strip():
-            return jsonify({"error": "Missing or invalid 'course_id' (must be a non-empty string)"}), 400
+            return jsonify({"error": "Missing or invalid 'course_id'"}), 400
 
         plan_name = plan_name.strip()
         course_id = course_id.strip()
 
-        # --- Validate level_identifier and construct level_key ---
-        level_key = None
+        # --- Validate level_identifier and construct target level_key ---
+        target_level_key = None
         if isinstance(level_identifier, int) and level_identifier > 0:
-            # If it's a positive integer, construct key like "Level 1"
-            level_key = f"Level {level_identifier}"
+            target_level_key = f"Level {level_identifier}"
         elif isinstance(level_identifier, str) and level_identifier.strip().lower() == "extra":
-            # If it's the string "Extra" (case-insensitive check, store consistently)
-            level_key = "Extra"
+            target_level_key = "Extra"
         else:
-            # Otherwise, the identifier is invalid
             return jsonify({"error": "'level_identifier' must be a positive integer or the string 'Extra'"}), 400
 
-        # --- 2. Check if Course Exists ---
+        # --- 2. Check if Course to Add Exists ---
         course_ref = db.collection('Courses').document(course_id)
         if not course_ref.get().exists:
-             return jsonify({"error": f"Course '{course_id}' not found in Courses collection"}), 404 # Or 400 Bad Request
+             return jsonify({"error": f"Course '{course_id}' not found in Courses collection"}), 404
 
-        # --- 3. Check if Plan and Level Key Exist ---
+        # --- 3. Check if Plan and Target Level Key Exist ---
         plan_ref = db.collection('Plans').document(plan_name)
         plan_doc = plan_ref.get()
 
@@ -682,74 +819,126 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
             return jsonify({"error": f"Plan '{plan_name}' not found"}), 404
 
         plan_data = plan_doc.to_dict()
-        # Check if the 'levels' map exists and if the specific level_key exists within it
         levels_map = plan_data.get('levels', {})
-        if level_key not in levels_map:
-            return jsonify({"error": f"Level '{level_key}' does not exist in plan '{plan_name}'. Create it first."}), 404 # Or 400
 
-        # Optional: Check if the level is actually an array/list
-        if not isinstance(levels_map.get(level_key), list):
-             return jsonify({"error": f"Target field for level '{level_key}' in plan '{plan_name}' is not an array/list."}), 400
+        # Check if target level exists and is a list
+        if target_level_key not in levels_map:
+            return jsonify({"error": f"Target level '{target_level_key}' does not exist in plan '{plan_name}'. Create it first."}), 404
+        if not isinstance(levels_map.get(target_level_key), list):
+             return jsonify({"error": f"Target field for level '{target_level_key}' in plan '{plan_name}' is not an array/list."}), 400
 
-        # --- 4. Add Course ID to Level Array ---
-        # Prepare update data using ArrayUnion and update timestamp
-        # Use dot notation to target the specific level key within the 'levels' map
-        update_data = {
-            f'levels.{level_key}': firestore.ArrayUnion([course_id]),
-            'last_update_date': datetime.now(timezone.utc)
-        }
+        # --- 3b. Check if Course Exists in ANOTHER Level (NEW STEP) ---
+        old_level_key = None
+        for key, value_list in levels_map.items():
+            # Check if it's a different level, is a list, and contains the course
+            if key != target_level_key and isinstance(value_list, list) and course_id in value_list:
+                old_level_key = key
+                print(f"INFO: Course '{course_id}' found in existing level '{old_level_key}'. Will move to '{target_level_key}'.")
+                break # Found it, no need to check further
 
-        # Update the document in Firestore
+        # --- 4. Prepare Update Payload (Handles Add or Move) ---
+        update_data = {}
+        message = ""
+
+        # Always add to the target level (ArrayUnion handles duplicates if already there)
+        update_data[f'levels.{target_level_key}'] = firestore.ArrayUnion([course_id])
+
+        # If found in an old level, also remove it from there
+        if old_level_key:
+            update_data[f'levels.{old_level_key}'] = firestore.ArrayRemove([course_id])
+            message = f"Course '{course_id}' moved from level '{old_level_key}' to level '{target_level_key}' in plan '{plan_name}'."
+        else:
+            # Check if it was already in the target level (ArrayUnion won't change anything)
+            if course_id in levels_map.get(target_level_key, []):
+                 message = f"Course '{course_id}' is already present in level '{target_level_key}' of plan '{plan_name}'."
+            else:
+                 message = f"Course '{course_id}' added to level '{target_level_key}' in plan '{plan_name}'."
+
+
+        # Always update the timestamp
+        update_data['last_update_date'] = datetime.now(timezone.utc)
+
+        # --- 5. Update the Document ---
+        # Perform add and potential remove in one atomic operation
         plan_ref.update(update_data)
 
-        # --- 5. Return Success Response ---
-        return jsonify({
-            "message": f"Course '{course_id}' added to level '{level_key}' in plan '{plan_name}' (or was already present)."
-            }), 200 # 200 OK
+        # --- 6. Return Success Response ---
+        return jsonify({"message": message}), 200 # 200 OK
 
     except Exception as e:
         # Log the error for server-side debugging
-        print(f"Error in /addCourseToPlanLevel for plan '{plan_name if 'plan_name' in locals() else 'unknown'}', level_identifier '{level_identifier if 'level_identifier' in locals() else 'unknown'}', course '{course_id if 'course_id' in locals() else 'unknown'}': {e}")
+        plan_name_local = plan_name if 'plan_name' in locals() else 'unknown'
+        level_id_local = level_identifier if 'level_identifier' in locals() else 'unknown'
+        course_id_local = course_id if 'course_id' in locals() else 'unknown'
+        print(f"Error in /addCourseToPlanLevel for plan '{plan_name_local}', level_identifier '{level_id_local}', course '{course_id_local}': {e}")
+        traceback.print_exc()
         # Return a generic server error message
-        return jsonify({"error": "Failed to add course to plan level due to an internal server error", "details": str(e)}), 500
+        return jsonify({"error": "Failed to add/move course in plan level due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getPlans', methods=['GET'])
-@admin_required # 
-def get_plans(decoded_token): # token_required provides decoded_token
+@admin_required # Using admin_required as provided in the prompt
+def get_plans(decoded_token): # admin_required provides decoded_token
     """
     Retrieves a list of all available plans from the 'Plans' collection.
-    Requires user authentication.
+    Requires admin authentication.
     Returns a JSON list containing each plan's ID and its data.
+    The 'levels' map within each plan's data is sorted numerically
+    with 'Extra' appearing last in the returned JSON.
     """
     try:
         # --- 1. Query the Plans Collection ---
-        # Get an iterator for all documents in the 'Plans' collection
         plans_ref = db.collection('Plans')
-        plans_stream = plans_ref.stream()
+        plans_stream = plans_ref.stream() # Get an iterator for all plan documents
 
-        # --- 2. Format the Plans Data ---
+        # --- 2. Format the Plans Data (with sorted levels) ---
         plans_list = []
         for doc in plans_stream:
-            # Get the document ID (which is the plan name/ID)
             plan_id = doc.id
-            # Get the document data (contains 'last_update_date', 'levels' map)
             plan_data = doc.to_dict()
 
-            # Combine ID and data into a single dictionary for the list
+            # --- Sort the 'levels' map (NEW) ---
+            levels_map = plan_data.get('levels', {})
+            if isinstance(levels_map, dict): # Proceed only if it's a dictionary
+
+                # Define a key function for sorting level strings
+                def sort_level_key(key):
+                    if isinstance(key, str):
+                        if key.strip().lower() == 'extra':
+                            return (float('inf'), key) # Ensure 'Extra' comes absolutely last
+                        if key.startswith('Level ') and key.split(' ')[1].isdigit():
+                            return (int(key.split(' ')[1]), key) # Sort by number first
+                    # Handle unexpected keys gracefully - place them before 'Extra'
+                    return (float('inf') - 1, key)
+
+                try:
+                    # Sort keys based on the defined function
+                    sorted_keys = sorted(levels_map.keys(), key=sort_level_key)
+                    # Create a new dictionary preserving the sorted order
+                    # (Standard dicts maintain insertion order in Python 3.7+)
+                    ordered_levels_map = {key: levels_map[key] for key in sorted_keys}
+                    # Replace the original levels map with the sorted one
+                    plan_data['levels'] = ordered_levels_map
+                except Exception as sort_e:
+                    print(f"Warning: Could not sort levels for plan {plan_id}. Error: {sort_e}")
+                    # Keep original unsorted levels map if sorting fails
+                    plan_data['levels'] = levels_map # Use original if sort fails
+
+            # --- End sorting ---
+
+            # Combine ID and potentially sorted data into a single dictionary
             plan_entry = {
                 "plan_id": plan_id,
-                **plan_data # Unpack the document data into the main dictionary
-                # Alternatively, nest data: "data": plan_data
+                **plan_data # Unpack the document data
             }
             plans_list.append(plan_entry)
 
         # --- 3. Return the Response ---
-        # Return the list of plans, even if it's empty
         return jsonify({"plans": plans_list}), 200
 
     except Exception as e:
         # Log the error for server-side debugging
         print(f"Error in /getPlans: {e}")
+        traceback.print_exc()
         # Return a generic server error message
         return jsonify({"error": "Failed to retrieve plans due to an internal server error", "details": str(e)}), 500
 
@@ -1176,14 +1365,762 @@ def delete_course_from_plan(decoded_token):
         # Return a generic server error message
         return jsonify({"error": "Failed to delete course from plan due to an internal server error", "details": str(e)}), 500
 
+@app.route('/getGraduatingStudents', methods=['POST'])
+@admin_required # Only admins should access this list
+def get_graduating_students_from_form(decoded_token):
+    """
+    Retrieves details of students marked as 'graduating' within a specific form's responses.
+    Requires admin authentication.
+    Expects JSON: {"form_id": "FORM_ID"}
+    Returns a JSON object containing the form_id and a list of graduating student objects,
+    each containing: student_id, name, email, gpa.
+    """
+    form_id = None # Initialize for error logging
+    try:
+        # --- 1. Get form_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+
+        # Validate form_id
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+        form_id = form_id.strip()
+        # --- End form_id retrieval ---
+
+        # --- 2. Fetch Form Document ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+
+        if not form_doc.exists:
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+
+        # --- 3. Identify Graduating Student UIDs ---
+        form_data = form_doc.to_dict()
+        form_responses_map = form_data.get('Form_Responses', {})
+        graduating_student_uids = []
+
+        if isinstance(form_responses_map, dict):
+            for student_uid, response_data in form_responses_map.items():
+                # Check if response_data is a dict and has the is_graduating flag set to True
+                if isinstance(response_data, dict) and response_data.get('is_graduating') is True:
+                    graduating_student_uids.append(student_uid)
+        else:
+             print(f"Warning: Form_Responses field in form {form_id} is not a map.")
+             # Continue with empty list if Form_Responses isn't a map
+
+        # --- 4. Fetch Details for Graduating Students (Batch Fetch) ---
+        graduating_students_details = []
+        if graduating_student_uids: # Only proceed if we found graduating students
+            student_refs = [db.collection('Students').document(uid) for uid in graduating_student_uids]
+            student_docs = db.get_all(student_refs) # Fetch student documents in batch
+
+            for student_doc in student_docs:
+                if student_doc.exists:
+                    student_data = student_doc.to_dict()
+                    student_detail = {
+                        "student_id": student_doc.id,
+                        # Use .get() with defaults for robustness against missing fields
+                        "name": student_data.get("name", "N/A"),
+                        "email": student_data.get("email", "N/A"),
+                        "gpa": student_data.get("gpa", 0.0) # Default GPA to 0.0 if missing
+                    }
+                    graduating_students_details.append(student_detail)
+                else:
+                    # Log if a student UID from responses doesn't have a matching student document
+                    print(f"Warning: Student document not found for UID: {student_doc.id} from form {form_id} responses.")
+                    # Optionally include an entry indicating the missing data:
+                    # graduating_students_details.append({"student_id": student_doc.id, "error": "Student profile not found"})
 
 
+        # --- 5. Return the List (with form_id) ---
+        # *** Added form_id to the returned JSON object ***
+        return jsonify({
+            "form_id": form_id,
+            "graduating_students": graduating_students_details
+            }), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /getGraduatingStudents for form {form_id_local}: {e}")
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve graduating students due to an internal server error", "details": str(e)}), 500
+
+@app.route('/getGraduatingStudentCourses', methods=['POST'])
+@admin_required # This report seems suitable for admins
+def get_graduating_student_courses(decoded_token):
+    """
+    Retrieves detailed information about the unique courses selected by students
+    marked as 'graduating' within a specific form's responses.
+    Includes a count of how many graduating students selected each course.
+    Requires admin authentication.
+    Expects JSON: {"form_id": "FORM_ID"}
+    Returns a map of course data, keyed by course_id. Each value contains
+    course details (excluding prerequisites) and the selection count.
+    """
+    form_id = None # Initialize for error logging
+    try:
+        # --- 1. Get form_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+
+        # Validate form_id
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+        form_id = form_id.strip()
+        # --- End form_id retrieval ---
+
+        # --- 2. Fetch Form Document ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+
+        if not form_doc.exists:
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+
+        # --- 3. Collect Course Selections & Count from Graduating Students ---
+        form_data = form_doc.to_dict()
+        form_responses_map = form_data.get('Form_Responses', {})
+        # Use Counter to store counts for each course ID
+        graduating_course_counts = collections.Counter()
+
+        if isinstance(form_responses_map, dict):
+            for student_uid, response_data in form_responses_map.items():
+                # Check if response_data is valid and student is graduating
+                if isinstance(response_data, dict) and response_data.get('is_graduating') is True:
+                    selected_courses = response_data.get('selected_courses', [])
+                    if isinstance(selected_courses, list):
+                         # Clean and update counts
+                         cleaned_courses = [c.strip() for c in selected_courses if isinstance(c, str) and c.strip()]
+                         graduating_course_counts.update(cleaned_courses)
+        else:
+             print(f"Warning: Form_Responses field in form {form_id} is not a map.")
+
+        # Get the set of unique course IDs that were selected by graduating students
+        unique_course_ids = list(graduating_course_counts.keys())
+
+        # --- 4. Fetch Details for the Collected Course IDs (Batch Fetch) ---
+        course_details_map_with_count = {}
+        if unique_course_ids: # Only proceed if any courses were selected
+            course_refs_to_get = [db.collection('Courses').document(cid) for cid in unique_course_ids]
+            course_docs = db.get_all(course_refs_to_get) # Fetch course documents in batch
+
+            for course_doc in course_docs:
+                course_id = course_doc.id
+                if course_doc.exists:
+                    course_data = course_doc.to_dict()
+                    # Extract desired details (excluding prerequisites)
+                    details = {
+                        "title": course_data.get("course_name", "N/A"), # Assuming field name is course_name
+                        "hours": course_data.get("hours", 0)
+                        # Add other relevant course details here if needed
+                    }
+                    # Combine details and count
+                    course_details_map_with_count[course_id] = {
+                        "details": details,
+                        "graduating_student_count": graduating_course_counts.get(course_id, 0) # Get count from Counter
+                    }
+                else:
+                    # Handle case where a selected course ID doesn't exist in Courses collection
+                    print(f"Warning: Course document not found for selected ID: {course_id}")
+                    course_details_map_with_count[course_id] = {
+                         "details": {"error": "Course details not found"},
+                         "graduating_student_count": graduating_course_counts.get(course_id, 0)
+                    }
 
 
-def get_form_statistics(decoded_token):
-    #this will show the form statistics, 
-    None
+        # --- 5. Return the Course Details Map with Counts ---
+        return jsonify({
+            "form_id": form_id,
+            # Renamed key slightly for clarity
+            "graduating_student_course_selections": course_details_map_with_count
+        }), 200
 
+    except Exception as e:
+        # Log the error for server-side debugging
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /getGraduatingStudentCourses for form {form_id_local}: {e}")
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve graduating student courses due to an internal server error", "details": str(e)}), 500
+
+@app.route('/getFormCourseStats', methods=['POST'])
+@admin_required # Admin report
+def get_form_course_stats(decoded_token):
+    """
+    Retrieves general statistics for each course selected within a specific form.
+    Requires admin authentication.
+    Expects JSON: {"form_id": "FORM_ID"}
+    Returns a map where keys are course IDs. Each value contains course details
+    (title, hours) and counts for total selections, graduating selections,
+    and undergraduate selections.
+    """
+    form_id = None # Initialize for error logging
+    try:
+        # --- 1. Get form_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+
+        # Validate form_id
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+        form_id = form_id.strip()
+        # --- End form_id retrieval ---
+
+        # --- 2. Fetch Form Document ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+
+        if not form_doc.exists:
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+
+        # --- 3. Calculate Course Counts (Total and Graduating) ---
+        form_data = form_doc.to_dict()
+        form_responses_map = form_data.get('Form_Responses', {})
+        course_total_counts = collections.Counter()
+        course_graduating_counts = collections.Counter()
+
+        if isinstance(form_responses_map, dict):
+            for student_uid, response_data in form_responses_map.items():
+                if isinstance(response_data, dict):
+                    selected_courses = response_data.get('selected_courses', [])
+                    is_graduating = response_data.get('is_graduating') is True # Check the flag
+
+                    if isinstance(selected_courses, list):
+                         cleaned_courses = [c.strip() for c in selected_courses if isinstance(c, str) and c.strip()]
+                         # Update total counts for all selected courses
+                         course_total_counts.update(cleaned_courses)
+                         # Update graduating counts only if the flag is true
+                         if is_graduating:
+                              course_graduating_counts.update(cleaned_courses)
+        else:
+             print(f"Warning: Form_Responses field in form {form_id} is not a map.")
+
+        # Get the set of unique course IDs involved
+        unique_course_ids = list(course_total_counts.keys())
+
+        # --- 4. Fetch Details for the Involved Course IDs (Batch Fetch) ---
+        course_stats_map = {}
+        if unique_course_ids: # Only proceed if any courses were selected
+            course_refs_to_get = [db.collection('Courses').document(cid) for cid in unique_course_ids]
+            course_docs = db.get_all(course_refs_to_get) # Fetch course documents in batch
+
+            course_details_temp = {}
+            for course_doc in course_docs:
+                 if course_doc.exists:
+                      course_data = course_doc.to_dict()
+                      course_details_temp[course_doc.id] = {
+                          "title": course_data.get("course_name", "N/A"),
+                          "hours": course_data.get("hours", 0)
+                      }
+                 else:
+                      print(f"Warning: Course document not found for selected ID: {course_doc.id}")
+                      course_details_temp[course_doc.id] = {"error": "Course details not found"}
+
+            # --- 5. Combine Details and Counts ---
+            for course_id in unique_course_ids:
+                total_count = course_total_counts.get(course_id, 0)
+                graduating_count = course_graduating_counts.get(course_id, 0)
+                undergrad_count = total_count - graduating_count # Calculate undergrad count
+
+                course_stats_map[course_id] = {
+                    "details": course_details_temp.get(course_id, {"error": "Course details not found"}),
+                    "total_selected": total_count,
+                    "graduating_selected": graduating_count,
+                    "undergraduate_selected": undergrad_count
+                }
+
+        # --- 6. Return the Course Statistics Map ---
+        return jsonify({
+            "form_id": form_id,
+            "course_stats": course_stats_map
+        }), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /getFormCourseStats for form {form_id_local}: {e}")
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve course statistics due to an internal server error", "details": str(e)}), 500
+
+@app.route('/getCoursePriorityList', methods=['POST'])
+@admin_required # Admin report
+def get_course_priority_list(decoded_token):
+    """
+    Retrieves a prioritized list of students who selected a specific course in a form.
+    Requires admin authentication.
+    Expects JSON: {"form_id": "FORM_ID", "course_id": "COURSE_ID"}
+    Prioritizes graduating students first, then sorts remaining students by GPA descending.
+    Returns a sorted list of student objects (id, name, email, gpa, is_graduating).
+    """
+    form_id = None # Initialize for error logging
+    course_id_target = None # Initialize for error logging
+    try:
+        # --- 1. Get form_id and course_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+        course_id_target = data.get('course_id')
+
+        # Validate inputs
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id'"}), 400
+        if not course_id_target or not isinstance(course_id_target, str) or not course_id_target.strip():
+            return jsonify({"error": "Missing or invalid 'course_id'"}), 400
+        form_id = form_id.strip()
+        course_id_target = course_id_target.strip()
+        # --- End input retrieval ---
+
+        # --- 2. Fetch Form Document ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+        if not form_doc.exists:
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+
+        # --- 3. Identify Students Selecting the Target Course ---
+        form_data = form_doc.to_dict()
+        form_responses_map = form_data.get('Form_Responses', {})
+        interested_students_raw = [] # Store {'uid': ..., 'is_graduating': ...}
+
+        if isinstance(form_responses_map, dict):
+            for student_uid, response_data in form_responses_map.items():
+                if isinstance(response_data, dict):
+                    selected_courses = response_data.get('selected_courses', [])
+                    # Check if the target course is in this student's selection
+                    # Ensure comparison is case-insensitive if needed, assuming IDs are consistent case now
+                    if isinstance(selected_courses, list) and course_id_target in selected_courses:
+                         interested_students_raw.append({
+                             "uid": student_uid,
+                             "is_graduating": response_data.get('is_graduating') is True # Get graduating status
+                         })
+        else:
+             print(f"Warning: Form_Responses field in form {form_id} is not a map.")
+             # If Form_Responses isn't a map, the list will be empty, which is handled below
+
+        # --- 4. Fetch Details for Interested Students (Batch Fetch) ---
+        priority_list_unsorted = []
+        if interested_students_raw: # Only fetch if there are interested students
+            student_uids = [s['uid'] for s in interested_students_raw]
+            student_refs = [db.collection('Students').document(uid) for uid in student_uids]
+            student_docs = db.get_all(student_refs) # Fetch student documents in batch
+
+            # Create a lookup for graduating status based on the form response
+            grad_status_lookup = {s['uid']: s['is_graduating'] for s in interested_students_raw} #create a new map basically
+
+            for student_doc in student_docs:
+                if student_doc.exists:
+                    student_data = student_doc.to_dict()
+                    uid = student_doc.id
+                    is_grad = grad_status_lookup.get(uid, False) # Get graduating status from form response
+                    student_detail = {
+                        "student_id": uid,
+                        "name": student_data.get("name", "N/A"),
+                        "email": student_data.get("email", "N/A"),
+                        "gpa": float(student_data.get("gpa", 0.0)), # Ensure GPA is float
+                        "is_graduating": is_grad # Include the flag from the form response
+                    }
+                    priority_list_unsorted.append(student_detail)
+                else:
+                    # Log if a student UID from responses doesn't have a matching student document
+                    print(f"Warning: Student document not found for UID: {student_doc.id} who selected course {course_id_target} in form {form_id}.")
+                    # Optionally include an entry indicating missing data:
+                    # priority_list_unsorted.append({"student_id": student_doc.id, "error": "Student profile not found", "is_graduating": grad_status_lookup.get(student_doc.id, False)})
+
+
+        # --- 5. Sort the List by Priority ---
+        # Sort primarily by is_graduating (True first), then secondarily by GPA (descending)
+        def sort_priority(student):
+            is_grad = student.get('is_graduating', False)
+            gpa = student.get('gpa', 0.0)
+            # Return a tuple: (priority_level, secondary_sort_value)
+            # Lower priority level comes first. True (graduating) maps to 0, False to 1.
+            # For secondary sort, use negative GPA to sort descending.
+            return (0 if is_grad else 1, -gpa)
+
+        priority_list_sorted = sorted(priority_list_unsorted, key=sort_priority)
+
+        # --- 6. Return the Prioritized List ---
+        return jsonify({
+            "form_id": form_id,
+            "course_id": course_id_target,
+            "priority_list": priority_list_sorted
+        }), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        course_id_local = course_id_target if 'course_id_target' in locals() else 'unknown'
+        print(f"Error in /getCoursePriorityList for form {form_id_local}, course {course_id_local}: {e}")
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve course priority list due to an internal server error", "details": str(e)}), 500
+
+@app.route('/getAllCoursePriorityLists', methods=['POST'])
+@admin_required # Admin report
+def get_all_course_priority_lists(decoded_token):
+    """
+    Retrieves prioritized lists of students for ALL courses selected within a specific form.
+    Requires admin authentication.
+    Expects JSON: {"form_id": "FORM_ID"}
+    For each course, prioritizes graduating students first, then sorts remaining students by GPA descending.
+    Returns a map where keys are course IDs and values are the sorted priority lists for that course.
+    """
+    form_id = None # Initialize for error logging
+    try:
+        # --- 1. Get form_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+
+        # Validate form_id
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id'"}), 400
+        form_id = form_id.strip()
+        # --- End input retrieval ---
+
+        # --- 2. Fetch Form Document ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+        if not form_doc.exists:
+             return jsonify({"error": f"Form '{form_id}' not found"}), 404
+
+        # --- 3. Aggregate Student Selections per Course ---
+        form_data = form_doc.to_dict()
+        form_responses_map = form_data.get('Form_Responses', {})
+        # Map course_id -> list of {'uid': ..., 'is_graduating': ...}
+        course_student_map = collections.defaultdict(list)
+        all_interested_uids = set() # Keep track of all unique UIDs we need to fetch
+
+        if isinstance(form_responses_map, dict):
+            for student_uid, response_data in form_responses_map.items():
+                if isinstance(response_data, dict):
+                    selected_courses = response_data.get('selected_courses', [])
+                    is_graduating = response_data.get('is_graduating') is True
+
+                    if isinstance(selected_courses, list):
+                         for course_id in selected_courses:
+                              if isinstance(course_id, str) and course_id.strip():
+                                   cleaned_course_id = course_id.strip()
+                                   student_info = {"uid": student_uid, "is_graduating": is_graduating}
+                                   course_student_map[cleaned_course_id].append(student_info)
+                                   all_interested_uids.add(student_uid) # Add UID to set for batch fetching
+        else:
+             print(f"Warning: Form_Responses field in form {form_id} is not a map.")
+             # If no responses, the function will return an empty map below
+
+        # --- 4. Fetch Details for All Involved Students (Batch Fetch) ---
+        student_details_lookup = {} # Store fetched details: {uid: {name:.., email:.., gpa:..}}
+        if all_interested_uids: # Only fetch if there are students
+            student_uids_list = list(all_interested_uids)
+            student_refs = [db.collection('Students').document(uid) for uid in student_uids_list]
+            student_docs = db.get_all(student_refs) # Fetch student documents in batch
+
+            for student_doc in student_docs:
+                if student_doc.exists:
+                    student_data = student_doc.to_dict()
+                    student_details_lookup[student_doc.id] = {
+                        "name": student_data.get("name", "N/A"),
+                        "email": student_data.get("email", "N/A"),
+                        "gpa": float(student_data.get("gpa", 0.0)) # Ensure GPA is float
+                    }
+                else:
+                    print(f"Warning: Student document not found for UID: {student_doc.id} referenced in form {form_id} responses.")
+                    # Store minimal info if profile missing
+                    student_details_lookup[student_doc.id] = {
+                         "name": "Profile Not Found", "email": "N/A", "gpa": 0.0
+                    }
+
+        # --- 5. Build and Sort Priority List for Each Course ---
+        all_priority_lists = {}
+
+        # Define the sorting key function once
+        def sort_priority(student_entry):
+            is_grad = student_entry.get('is_graduating', False)
+            gpa = student_entry.get('gpa', 0.0)
+            return (0 if is_grad else 1, -gpa) # Graduating first (0), then highest GPA first (-gpa)
+
+        # Iterate through each course that was selected by at least one student
+        for course_id, interested_students_raw in course_student_map.items():
+            priority_list_unsorted = []
+            for student_info in interested_students_raw:
+                 uid = student_info['uid']
+                 # Combine fetched details with the graduating status from the response
+                 details = student_details_lookup.get(uid, {"name": "Error", "email": "Error", "gpa": 0.0}) # Fallback
+                 priority_list_unsorted.append({
+                     "student_id": uid,
+                     "name": details["name"],
+                     "email": details["email"],
+                     "gpa": details["gpa"],
+                     "is_graduating": student_info['is_graduating'] # Use status from response
+                 })
+
+            # Sort the list for this specific course
+            priority_list_sorted = sorted(priority_list_unsorted, key=sort_priority)
+            # Add the sorted list to the final result map
+            all_priority_lists[course_id] = priority_list_sorted
+
+
+        # --- 6. Return the Map of Priority Lists ---
+        return jsonify({
+            "form_id": form_id,
+            "course_priority_lists": all_priority_lists # Map: {course_id: [sorted_student_list]}
+        }), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /getAllCoursePriorityLists for form {form_id_local}: {e}")
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to retrieve all course priority lists due to an internal server error", "details": str(e)}), 500
+
+@app.route('/generateSectionSchedule', methods=['POST'])
+@admin_required
+def generate_section_schedule(decoded_token):
+    """
+    Gathers data, prepares and sends a prompt to a Generative AI API
+    to generate a section schedule recommendation using the genai.Client structure.
+    Requires admin authentication.
+    Expects JSON: {"form_id": "FORM_ID", "section_capacity": Optional[int], "time_preference": Optional[str]}
+    Valid time_preference options: "MorningAndAfternoonFocus", "AfternoonAndEveningFocus".
+    Default time preference is 'MorningAndAfternoonFocus'.
+    Returns the structured JSON response from the LLM API.
+    Uses the 'gemini-2.0-flash' model as requested by user.
+    """
+    form_id = None
+    model_name = None # Initialize for error logging
+    try:
+        # --- 1. Get Inputs ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        form_id = data.get('form_id')
+        section_capacity = data.get('section_capacity', 25)
+        time_preference = data.get('time_preference', "MorningAndAfternoonFocus")
+
+        # Validate inputs
+        if not form_id or not isinstance(form_id, str) or not form_id.strip():
+            return jsonify({"error": "Missing or invalid 'form_id'"}), 400
+        if not isinstance(section_capacity, int) or section_capacity <= 0:
+             return jsonify({"error": "'section_capacity' must be a positive integer"}), 400
+        valid_preferences = ["MorningAndAfternoonFocus", "AfternoonAndEveningFocus"]
+        if time_preference not in valid_preferences:
+             return jsonify({"error": f"Invalid 'time_preference'. Valid options: {valid_preferences}"}), 400
+        form_id = form_id.strip()
+
+        # --- 2. Fetch Form & Plan Info ---
+        form_ref = db.collection('Forms').document(form_id)
+        form_doc = form_ref.get()
+        if not form_doc.exists: return jsonify({"error": f"Form '{form_id}' not found"}), 404
+        form_data = form_doc.to_dict()
+        plan_id = form_data.get('plan_id')
+        if not plan_id: return jsonify({"error": "Form missing 'plan_id'"}), 500
+
+        plan_ref = db.collection('Plans').document(plan_id)
+        plan_doc = plan_ref.get()
+        if not plan_doc.exists: return jsonify({"error": f"Plan '{plan_id}' not found"}), 404
+        plan_data = plan_doc.to_dict()
+        levels_map = plan_data.get('levels', {})
+
+        # --- 3. Get Course Demand (Filtering by Prefix) ---
+        form_responses_map = form_data.get('Form_Responses', {})
+        course_demand = collections.Counter()
+        relevant_course_prefixes = ("CPIT", "CPIS", "CPCS")
+
+        if isinstance(form_responses_map, dict):
+            for response_data in form_responses_map.values():
+                if isinstance(response_data, dict):
+                    selected = response_data.get('selected_courses', [])
+                    if isinstance(selected, list):
+                        cleaned = [c.strip() for c in selected if isinstance(c, str) and c.strip().startswith(relevant_course_prefixes)]
+                        course_demand.update(cleaned)
+
+        relevant_course_ids = list(course_demand.keys())
+        if not relevant_course_ids:
+             return jsonify({"message": "No relevant course selections found in this form.", "schedule_assignments": {}}), 200
+
+        # --- 4. Fetch Course Details (Hours) & Calculate Sections Needed ---
+        courses_info = {}
+        course_refs_to_get = [db.collection('Courses').document(cid) for cid in relevant_course_ids]
+        course_docs = db.get_all(course_refs_to_get)
+
+        for course_doc in course_docs:
+            if course_doc.exists:
+                course_id = course_doc.id
+                c_data = course_doc.to_dict()
+                hours = c_data.get('hours')
+                if isinstance(hours, int) and hours > 0:
+                     demand = course_demand.get(course_id, 0)
+                     num_sections = math.ceil(demand / section_capacity) if demand > 0 else 0
+                     if num_sections > 0:
+                          courses_info[course_id] = {
+                              "title": c_data.get("course_name", "N/A"),
+                              "hours": hours,
+                              "demand": demand,
+                              "sections_needed": num_sections
+                          }
+                else: print(f"Warning: Course {course_id} has invalid/missing hours.")
+            else: print(f"Warning: Course {course_doc.id} not found in Courses collection.")
+
+        if not courses_info:
+             return jsonify({"message": "No valid courses requiring sections found.", "schedule_assignments": {}}), 200
+
+        # --- 5. Map Courses to Levels ---
+        course_levels = collections.defaultdict(list)
+        for level_key, courses in levels_map.items():
+             if isinstance(courses, list):
+                  level_num_str = level_key.split(' ')[1] if level_key.startswith('Level ') and len(level_key.split(' ')) > 1 and level_key.split(' ')[1].isdigit() else 'Extra'
+                  for course_id in courses:
+                       if course_id in courses_info:
+                            course_levels[level_num_str].append(course_id)
+
+        # --- 6. Generate Available Time Slots ---
+        slots_50_min, slots_80_min = generate_time_slots()
+
+        # --- 7. Structure Data for Prompt ---
+        # Dynamically set time constraint text based on the two valid preferences
+        if time_preference == "MorningAndAfternoonFocus":
+            time_constraint_text = "Time preference: Focus scheduling sections primarily in the Morning (before 12 PM) and Afternoon (1 PM to 5 PM / 13:00-17:00). Minimize Evening slots (after 5 PM / 17:00)."
+        elif time_preference == "AfternoonAndEveningFocus":
+            time_constraint_text = "Time preference: Focus scheduling sections primarily in the Afternoon (1 PM to 5 PM / 13:00-17:00) and Evening (5 PM / 17:00 or later, but minimize slots after 9 PM / 21:00). Minimize Morning slots (before 12 PM)."
+        else: # Fallback
+             time_constraint_text = "Time preference: General distribution, minimize very late evening (after 9 PM / 21:00)."
+
+        # *** Construct the prompt_data dictionary explicitly ***
+        prompt_data = {
+            "goal": "Generate a weekly class schedule assigning time slots to course sections.",
+            "constraints": [
+                f"Default section capacity: {section_capacity} students.",
+                time_constraint_text, # Use the dynamically generated text
+                "Prioritize minimizing time conflicts between sections of different courses within the same level. Maximize non-conflicting options.",
+                "3-credit courses require three 50-min slots (Sun/Tue/Thu) OR two 80-min slots (Mon/Wed).",
+                "2-credit courses require two 50-min slots (Sun/Tue/Thu)."
+            ],
+            "courses_to_schedule": [
+                {"course_id": cid, **info} for cid, info in courses_info.items()
+            ],
+            "level_groupings": dict(course_levels),
+            "available_50_min_slots": slots_50_min,
+            "available_80_min_slots": slots_80_min,
+            # *** Include full desired_output_format structure ***
+            "desired_output_format": {
+                "description": "A JSON object where keys are course IDs. Each value is a list of sections for that course. Each section has a unique name (e.g., COURSE_ID-1, COURSE_ID-2) and a list of assigned time slots (day, start, end).",
+                "example": {
+                    "CPIT-XXX": [
+                        {"section_name": "CPIT-XXX-1", "slots": [{"day": "Mon", "start": "HH:MM", "end": "HH:MM"}, {"day":"Wed", "start":"HH:MM", "end":"HH:MM"}]},
+                        {"section_name": "CPIT-XXX-2", "slots": []}
+                    ],
+                    "CPIT-YYY": [
+                         {"section_name": "CPIT-YYY-1", "slots": [{"day": "Sun", "start": "HH:MM", "end": "HH:MM"}, {"day":"Tue", "start":"HH:MM", "end":"HH:MM"}, {"day":"Thu", "start":"HH:MM", "end":"HH:MM"}]}
+                    ]
+                }
+            }
+            # *** End of desired_output_format ***
+        }
+        prompt_string = f"""
+        Please generate a weekly class schedule based on the following data and constraints.
+        Ensure the output is a valid JSON object matching the 'desired_output_format'.
+
+        Data and Constraints:
+        {json.dumps(prompt_data, indent=2)}
+        """
+
+        # --- 8. Call External LLM API (Using Client structure) ---
+        print("--- PREPARING TO CALL LLM API (Client Method) ---")
+        generated_schedule = None
+        try:
+            from google import genai # Attempting import as per user confirmation
+
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY environment variable not set.")
+
+            print("--- Initializing genai.Client ---")
+            client = genai.Client(api_key=api_key)
+
+            model_name = 'gemini-2.0-flash' # Using the model specified by the user
+            print(f"--- Using Model: {model_name} ---")
+            print(f"--- SENDING PROMPT TO LLM API (Client Method) ---")
+
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt_string
+            )
+            print("--- LLM RESPONSE RECEIVED (Client Method) ---")
+
+            # --- Process Response ---
+            schedule_json_string = response.text
+            if schedule_json_string.startswith("```json"):
+                 schedule_json_string = schedule_json_string[7:]
+            if schedule_json_string.endswith("```"):
+                 schedule_json_string = schedule_json_string[:-3]
+            schedule_json_string = schedule_json_string.strip()
+
+            generated_schedule = json.loads(schedule_json_string)
+
+            # --- Basic Validation of LLM Response ---
+            if not isinstance(generated_schedule, dict):
+                 print(f"LLM response was not a valid JSON object (dictionary). Response:\n{response.text}")
+                 raise ValueError("LLM response was not structured as expected (not a dictionary).")
+            # TODO: Add more robust validation here
+            print("--- LLM RESPONSE PARSED SUCCESSFULLY ---")
+
+        except ImportError as imp_err:
+             print(f"ImportError: {imp_err}")
+             print("Could not import 'genai' from 'google'. Ensure correct library (e.g., 'google-cloud-aiplatform') is installed.")
+             traceback.print_exc()
+             return jsonify({"error": "ImportError: Required library structure not found.", "details": str(imp_err)}), 500
+        except AttributeError as attr_err:
+             print(f"AttributeError calling API: {attr_err}")
+             print("Library structure mismatch (e.g., genai.Client or client.models.generate_content). Ensure correct library/version.")
+             traceback.print_exc()
+             return jsonify({"error": "AttributeError: Library structure mismatch.", "details": str(attr_err)}), 500
+        except Exception as api_e:
+            print(f"Error calling or processing Generative AI API response: {api_e}")
+            traceback.print_exc()
+            error_detail = str(api_e)
+            status_code = 503
+            if "API key not valid" in error_detail:
+                 error_message = "AI service authentication failed. Check API key or try Application Default Credentials."
+            elif "is not found" in error_detail or "is not supported" in error_detail or "permission" in error_detail.lower():
+                 error_message = f"Model name/version '{model_name}' not found, not supported, or permission denied. Check model name or authentication (API Key / ADC)."
+            else:
+                 error_message = "Failed to get response from AI service."
+            return jsonify({"error": error_message, "details": error_detail}), status_code
+
+        if generated_schedule is None:
+             try:
+                  feedback = getattr(response, 'prompt_feedback', None)
+                  if feedback and getattr(feedback, 'block_reason', None):
+                       block_reason = feedback.block_reason.name
+                       print(f"LLM call blocked due to safety settings: {block_reason}")
+                       return jsonify({"error": f"Request blocked by AI safety filters: {block_reason}"}), 400
+             except Exception: pass
+             return jsonify({"error": "Failed to get schedule from AI service (unknown reason)."}), 503
+        # --- End API Call Block ---
+
+
+        # --- 9. Return Generated Schedule ---
+        return jsonify({
+            "form_id": form_id,
+            "schedule_preference": time_preference,
+            "section_assignments": generated_schedule
+        }), 200
+
+    except Exception as e:
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /generateSectionSchedule for form {form_id_local}: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "Failed to generate section schedule due to an internal server error", "details": str(e)}), 500
 
 
 #End of Admin Functions Section _______________
@@ -1875,6 +2812,119 @@ def add_Student(decoded_token):#Kind of useless
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/testLlMPrompt', methods=['POST'])
+def test_llm_prompt():
+    """
+    Sends a given text prompt directly to a Generative AI model using the
+    client structure seen in some documentation examples.
+    Returns the raw text response. For testing/debugging prompts.
+    Expects JSON: {"prompt": "Your prompt text here"}
+    WARNING: This structure might require the 'google-cloud-aiplatform' library
+             and potentially different authentication (ADC).
+    """
+    prompt_text = None # Initialize for error logging
+    model_name = None # Initialize for error logging
+    try:
+        # --- 1. Get Prompt from JSON Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        prompt_text = data.get('prompt')
+
+        if not prompt_text or not isinstance(prompt_text, str) or not prompt_text.strip():
+            return jsonify({"error": "Missing or invalid 'prompt' text in request body"}), 400
+        prompt_text = prompt_text.strip()
+        # --- End prompt retrieval ---
+
+        # --- 2. Call External LLM API (Using Client structure from image) ---
+        print("--- PREPARING TO CALL LLM API (Test Function - Client Method) ---")
+
+        llm_response_text = None # Initialize
+        try:
+            # *** Attempting import and client structure from documentation image ***
+            # This might fail if the correct library (potentially google-cloud-aiplatform)
+            # is not installed, or if 'google' doesn't have 'genai' structured this way.
+            from google import genai
+
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY environment variable not set.")
+
+            # Initialize client as shown in the image
+            # This might raise an AttributeError if 'genai' doesn't have 'Client'
+            print("--- Initializing genai.Client ---")
+            client = genai.Client(api_key=api_key)
+
+            # Using a known recent model name compatible with newer APIs
+            model_name = 'gemini-2.0-flash'
+            # model_name = 'gemini-2.0-flash' # As shown in image, might not exist
+            print(f"--- Using Model: {model_name} ---")
+            print(f"--- SENDING PROMPT TO LLM API (Test Function - Client Method) ---")
+
+            # Calling generate_content via client.models as shown in image
+            # This might raise an AttributeError if client has no 'models' or models has no 'generate_content'
+            # The parameter name might also be 'prompt' instead of 'contents' depending on library/version
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt_text # Parameter name from image
+                # Safety settings might be passed differently here, check specific library docs if needed
+            )
+            print("--- LLM RESPONSE RECEIVED (Test Function - Client Method) ---")
+
+            # Get the raw text response (assuming response.text exists)
+            llm_response_text = response.text
+
+
+        except ImportError as imp_err:
+             print(f"ImportError: {imp_err}")
+             print("Could not import 'genai' from 'google'.")
+             print("You might need to install 'google-cloud-aiplatform': pip install google-cloud-aiplatform")
+             traceback.print_exc()
+             return jsonify({"error": "ImportError: Required library structure not found. Try installing 'google-cloud-aiplatform'.", "details": str(imp_err)}), 500
+        except AttributeError as attr_err:
+             print(f"AttributeError calling API: {attr_err}")
+             print("This likely means the code structure (genai.Client or client.models.generate_content) does not match the installed library.")
+             print("Consider switching back to the 'google.generativeai' library structure or ensuring 'google-cloud-aiplatform' is installed and used correctly.")
+             traceback.print_exc()
+             return jsonify({"error": "AttributeError: Library structure mismatch.", "details": str(attr_err)}), 500
+        except Exception as api_e:
+            # General error handling, including API key / model not found issues
+            print(f"Error calling Generative AI API: {api_e}")
+            traceback.print_exc()
+            error_detail = str(api_e)
+            status_code = 503
+            if "API key not valid" in error_detail:
+                 error_message = "AI service authentication failed. Check API key or try Application Default Credentials."
+            elif "is not found" in error_detail or "is not supported" in error_detail or "permission" in error_detail.lower():
+                 error_message = f"Model name/version '{model_name}' not found, not supported, or permission denied. Check model name or authentication (API Key / ADC)."
+            else:
+                 error_message = "Failed to get response from AI service."
+            return jsonify({"error": error_message, "details": error_detail}), status_code
+
+        if llm_response_text is None:
+             # May occur if API returns success but no text, or blocked content
+             try:
+                  # Attempt to access potential safety feedback (structure might differ)
+                  feedback = getattr(response, 'prompt_feedback', None)
+                  if feedback and getattr(feedback, 'block_reason', None):
+                       block_reason = feedback.block_reason.name
+                       print(f"LLM call blocked due to safety settings: {block_reason}")
+                       return jsonify({"error": f"Request blocked by AI safety filters: {block_reason}"}), 400
+             except Exception:
+                  pass # Ignore if feedback structure is different or missing
+             return jsonify({"error": "Failed to get response text from AI service (API call succeeded but no text found)."}), 503
+        # --- End API Call Block ---
+
+        # --- 3. Return Raw LLM Response ---
+        return jsonify({
+            "prompt_sent_length": len(prompt_text),
+            "llm_response": llm_response_text
+        }), 200
+
+    except Exception as e:
+        print(f"Error in /testLlMPrompt: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "Failed to process test prompt due to an internal server error", "details": str(e)}), 500
 
 #End of Other functions (niche,useless,etc) _______________
 
