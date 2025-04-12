@@ -1,27 +1,30 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
-const ShowCoursesPopUp = ({ parentCourse, planID, planLevel }) => {
+const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse,setIsLoadingForPage}) => {
   const backendIp = "http://127.0.0.1:5000"; // Backend IP domain
   const [allCourses, setAllCourses] = useState([]); // State for the list of courses
   const [isCreatingCourse, setIsCreatingCourse] = useState(false); // Toggle form visibility
-  const [department, setDepartment] = useState(""); // Form field: department (String)
-  const [courseNumber, setCourseNumber] = useState(""); // Form field: course_number (int)
-  const [courseName, setCourseName] = useState(""); // Form field: course_name (String)
-  const [hours, setHours] = useState(""); // Form field: hours (int)
-  const [updateTheTable,setUpdateTheTable]=useState(false)
+  const [department, setDepartment] = useState(""); // Form field: department
+  const [courseNumber, setCourseNumber] = useState(""); // Form field: course_number
+  const [courseName, setCourseName] = useState(""); // Form field: course_name
+  const [hours, setHours] = useState(""); // Form field: hours
+  const [updateTheTable, setUpdateTheTable] = useState(false); // Trigger table update
+  const [localParentCourse, setLocalParentCourse] = useState(parentCourse); // Local parent course state
+  const [isLoading, setIsLoading] = useState(true); // NEW: Loading state
   const { user } = useAuth(); // Get current user from AuthContext
   const token = user?.accessToken; // Access token for backend requests
 
-  // Fetch courses when the component mounts
+  // Fetch courses when updateTheTable changes
   useEffect(() => {
-    if (!user) return; // Exit if no user is authenticated
-    fetchCourses();
-    setUpdateTheTable(false)
-  }, [updateTheTable]); // Empty dependency array to run only on mount
+    if (!user) return;
+    fetchCourses().finally(() => setIsLoading(false)); // Set loading to false when fetch completes
+    setUpdateTheTable(false);
+  }, [updateTheTable,user]);
 
   // Function to fetch courses from the backend
   const fetchCourses = async () => {
+    setIsLoading(true); // Start loading
     try {
       const response = await fetch(`${backendIp}/getCourses`, {
         method: "GET",
@@ -46,12 +49,12 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel }) => {
 
   // Handle form submission to create a new course
   const handleSaveNewCourse = async (e) => {
-    e.preventDefault(); // Prevent default form submission
+    e.preventDefault();
     const newCourse = {
       department,
-      course_number: parseInt(courseNumber), // Convert to integer
+      course_number: parseInt(courseNumber),
       course_name: courseName,
-      hours: parseInt(hours), // Convert to integer
+      hours: parseInt(hours),
     };
     try {
       const response = await fetch(`${backendIp}/addCourse`, {
@@ -61,39 +64,82 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel }) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(newCourse),
-      })
-      setUpdateTheTable(true)
+      });
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      const createdCourse = await response.json(); // Get the newly created course
-      setAllCourses([...allCourses, createdCourse]); // Add to course list
-      setIsCreatingCourse(false); // Hide the form
-      // Reset form fields
-      setDepartment("");
+      setUpdateTheTable(true); // Trigger table update
+      setIsCreatingCourse(false); // Hide form
+      setDepartment(""); // Reset form
       setCourseNumber("");
       setCourseName("");
       setHours("");
     } catch (error) {
       console.error("Error creating course:", error);
-      alert("Failed to create course. Please try again."); // Basic error feedback
+      alert("Failed to create course. Please try again.");
     }
   };
 
-  // Placeholder handler for adding a course to a plan TODO
-  const handleAddCourseToPlan = (course, planID, planLevel) => {
-    console.log(`Adding ${course.department+course.course_number} to plan ${planID} at level ${planLevel}`);
-  };
+  // Placeholder handler for adding a course to a plan
+  const handleAddCourseToPlan = async (course, planID, planLevel) => {
+    // setIsLoadingForPage(true)
+    let fixedPlanLevel= planLevel
+    const course_ide=course.department +"-"+course.course_number
+    console.log(`Adding ${course_ide} to plan ${planID} at level ${planLevel}`);
+    if (planLevel.startsWith("Level")) {
+      fixedPlanLevel = parseInt(planLevel.replace("Level", "").trim());
+    }
+      try {
+          const response = await fetch(`${backendIp}/addCourseToPlanLevel`, {
+            method: "POST",
+            headers: {
+              "Authorization": `${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ plan_name: planID ,level_identifier: fixedPlanLevel ,course_id: course_ide}),
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+      
+      } catch (error) {
+        console.error("Error adding plan:", error);
+      }
+      finally{
+        // setIsLoadingForPage(false)
+      }
+    };
 
-  // Placeholder handler for adding a prerequisite TODO
-  const handleAddingPrerequisite = (course, parentCourse) => {
-    console.log(`Adding ${course.department+course.course_number} as prerequisite to ${parentCourse.department+parentCourse.course_number}`);
-  };
+  // Placeholder handler for adding a prerequisite
+  const handleAddingPrerequisite = async (course, localParentCourse) => {
+    setUpdateTheTable(true); // Trigger table update
+    const parent_course_id = localParentCourse.department + "-"+ localParentCourse.course_number
+    const prerequisite_course_id= course.department +"-"+course.course_number
+      try {
+          const response = await fetch(`${backendIp}/addCoursePre`, {
+            method: "POST",
+            headers: {
+              "Authorization": `${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ course_id: parent_course_id ,prerequisite: prerequisite_course_id}),
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+      
+      } catch (error) {
+        console.error("Error adding plan:", error);
+      }
+      finally{
+        setLocalParentCourse(null)
+      }
+    };
 
   // Dynamic header based on context
   let header;
-  if (parentCourse) {
+  if (localParentCourse) {
     header = (
       <h2 className="text-xl font-semibold mb-4">
-        Select a course to add as prerequisite to {parentCourse.courseCode}
+        Select a course to add as prerequisite to {localParentCourse.department+localParentCourse.course_number}
       </h2>
     );
   } else if (planID) {
@@ -107,7 +153,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel }) => {
   }
 
   return (
-    <div className="p-6 bg-white rounded shadow-md">
+    <div className="p-6 bg-white rounded shadow-md w-[75vw] h-[75vh] flex flex-col">
       {isCreatingCourse ? (
         <>
           <h2 className="text-xl font-semibold mb-4">Create New Course</h2>
@@ -130,12 +176,12 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel }) => {
                 value={courseNumber}
                 onChange={(e) => {
                   const value = e.target.value;
-                  if (/^[0-9]*$/.test(value)) { //here I used regEx to prevent the user from entering non numbers 
-                    setCourseNumber(value); //I could have used input type numbers but I didn't like the way the browser handle it
-                  } // / stand for the start of the reg ^ stand for the start of the string ensure the reg start from the begining
-                }} //form 0-9 then the * is like telling the reg its ok if it was longer than 1 and lastly $ apply for the whole input 
+                  if (/^[0-9]*$/.test(value)) {
+                    setCourseNumber(value);
+                  }
+                }}
                 className="w-full p-2 border border-gray-300 rounded"
-                inputMode="numeric" //for phone users
+                inputMode="numeric"
                 placeholder="Ex. 250"
                 required
               />
@@ -147,14 +193,13 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel }) => {
                 value={hours}
                 onChange={(e) => {
                   const value = e.target.value;
-                  // Only update hours if the value is empty (to allow clearing) or non-negative
                   if (value === "" || Number(value) >= 1) {
                     setHours(value);
                   }
                 }}
                 className="w-full p-2 border border-gray-300 rounded"
                 placeholder="Ex. 3"
-                min="1" // Prevents negative numbers via browser UI
+                min="1"
                 max="15"
                 required
               />
@@ -187,44 +232,74 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel }) => {
             </div>
           </form>
         </>
+      ) : isLoading ? (
+        <p className="text-gray-600">Loading courses...</p> // NEW: Loading indicator
       ) : (
         <>
           {header}
-          <ul className="space-y-2">
-            {allCourses.map((course) => (
-              
-              <li
-                key={course.department+course.course_number}
-                className="flex items-center justify-between p-3 border border-gray-200 rounded"
-              >
-                <span className="font-medium">{course.department+course.course_number}</span>
-                <div className="space-x-2">
-                  {parentCourse && ( //if parentCourse isn't null load this info 
-                    <button
-                      onClick={() => handleAddingPrerequisite(course, parentCourse)}
-                      className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
-                    >
-                      Add as Prerequisite
-                    </button>
+          <div className="flex-grow overflow-y-auto"> {/* NEW: Scrollable container */}
+            <ul className="space-y-2">
+              {allCourses.map((course) => (
+                <li
+                  key={course.department + course.course_number}
+                  className="bg-white p-4 border border-gray-200 rounded shadow hover:shadow-md transition-shadow"
+                >
+                  <h3 className="text-xl font-semibold text-gray-800">
+                    {course.department}{course.course_number}
+                  </h3>
+                  {course.prerequisites && course.prerequisites.length > 0 ? (
+                    <ul className="mt-2 ml-5 list-disc text-sm text-gray-700">
+                      {course.prerequisites.map((prereq, index) => (
+                        <li key={index}>{prereq}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-600">No prerequisites</p>
                   )}
-                  {planID && (
-                    <button
-                      onClick={() => handleAddCourseToPlan(course, planID, planLevel)}
-                      className="bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded"
-                    >
-                      Add to Plan
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                  <div className="mt-4 flex justify-end space-x-2">
+                    {!localParentCourse && (
+                      <button
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
+                        onClick={() => setLocalParentCourse(course)}
+                      >
+                        Add prerequisite
+                      </button>
+                    )}
+                    {localParentCourse && !(localParentCourse === course) && (
+                      <button
+                        onClick={() => handleAddingPrerequisite(course, localParentCourse)}
+                        className="bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded"
+                      >
+                        Add as Prerequisite
+                      </button>
+                    )}
+                    {(planID && !localParentCourse) && (
+                      <button
+                        onClick={() => handleAddCourseToPlan(course, planID, planLevel)}
+                        className="bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded"
+                      >
+                        Add to Plan
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
           <button
             onClick={handleCreateNewCourse}
             className="mt-4 bg-blue-500 hover:bg-blue-600 text-white text-sm py-2 px-4 rounded"
           >
             Create New Course
           </button>
+          {localParentCourse && <button //if there is set prerequist then show this button else hide it
+            onClick={()=>{
+                setLocalParentCourse(null)
+            }}
+            className="mt-4 ml-8 bg-gray-400 hover:bg-gray-500 text-black text-sm py-2 px-4 rounded"
+          >
+            Cancel
+          </button>}
         </>
       )}
     </div>
