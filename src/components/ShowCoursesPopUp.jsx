@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { data } from "react-router-dom";
 
-const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse,setIsLoadingForPage}) => {
+const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse, setIsLoadingForPage }) => {
   const backendIp = "http://127.0.0.1:5000"; // Backend IP domain
   const [allCourses, setAllCourses] = useState([]); // State for the list of courses
   const [isCreatingCourse, setIsCreatingCourse] = useState(false); // Toggle form visibility
@@ -11,7 +12,8 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse
   const [hours, setHours] = useState(""); // Form field: hours
   const [updateTheTable, setUpdateTheTable] = useState(false); // Trigger table update
   const [localParentCourse, setLocalParentCourse] = useState(parentCourse); // Local parent course state
-  const [isLoading, setIsLoading] = useState(true); // NEW: Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  const [courseThatWantToBeDeleted, setCourseThatWantToBeDeleted] = useState(null)
   const { user } = useAuth(); // Get current user from AuthContext
   const token = user?.accessToken; // Access token for backend requests
 
@@ -20,7 +22,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse
     if (!user) return;
     fetchCourses().finally(() => setIsLoading(false)); // Set loading to false when fetch completes
     setUpdateTheTable(false);
-  }, [updateTheTable,user]);
+  }, [updateTheTable, user]);
 
   // Function to fetch courses from the backend
   const fetchCourses = async () => {
@@ -77,69 +79,108 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse
       alert("Failed to create course. Please try again.");
     }
   };
+  
+  useEffect(() => {
+    if(courseThatWantToBeDeleted){
+    handleDeleteCourse().finally(() => {
+      setCourseThatWantToBeDeleted(null)
+    });
+  }
+  }, [courseThatWantToBeDeleted]);
+
+  const handleDeleteCourse = async () => {
+    const courseThatWantToBeDeletedTemp = courseThatWantToBeDeleted.department +"-"+courseThatWantToBeDeleted.course_number
+    try {
+      const response = await fetch(`${backendIp}/deleteCourse`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(courseThatWantToBeDeletedTemp),
+      });
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      setUpdateTheTable(true); 
+    } catch (error) {
+      console.error("Error creating course:", error);
+      alert("Failed to create course. Please try again.");
+    }
+  };
+
 
   // Placeholder handler for adding a course to a plan
   const handleAddCourseToPlan = async (course, planID, planLevel) => {
     // setIsLoadingForPage(true)
-    let fixedPlanLevel= planLevel
-    const course_ide=course.department +"-"+course.course_number
+    let fixedPlanLevel = planLevel
+    const course_ide = course.department + "-" + course.course_number
     console.log(`Adding ${course_ide} to plan ${planID} at level ${planLevel}`);
     if (planLevel.startsWith("Level")) {
       fixedPlanLevel = parseInt(planLevel.replace("Level", "").trim());
     }
-      try {
-          const response = await fetch(`${backendIp}/addCourseToPlanLevel`, {
-            method: "POST",
-            headers: {
-              "Authorization": `${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ plan_name: planID ,level_identifier: fixedPlanLevel ,course_id: course_ide}),
-          });
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-      
-      } catch (error) {
-        console.error("Error adding plan:", error);
+    try {
+      const response = await fetch(`${backendIp}/addCourseToPlanLevel`, {
+        method: "POST",
+        headers: {
+          "Authorization": `${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plan_name: planID, level_identifier: fixedPlanLevel, course_id: course_ide }),
+      });
+      const data = await response.json(); // Parse the response body as JSON
+      console.log(data)
+      if(data.frontEndMessage == 101 ){
+        setIsAddedNewCourse({level: planLevel,course:course_ide,alreadyAdded:true})
       }
-      finally{
-        // setIsLoadingForPage(false)
+      else if(data.frontEndMessage ==102){
+        setIsAddedNewCourse({level: planLevel,course:course_ide,moved:true,oldLevevl:data.old_level_key})
       }
-    };
+      else{
+        setIsAddedNewCourse({level: planLevel,course:course_ide})
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+    } catch (error) {
+      console.error("Error adding plan:", error);
+    }
+    finally {
+      // setIsLoadingForPage(false)
+    }
+  };
 
   // Placeholder handler for adding a prerequisite
   const handleAddingPrerequisite = async (course, localParentCourse) => {
     setUpdateTheTable(true); // Trigger table update
-    const parent_course_id = localParentCourse.department + "-"+ localParentCourse.course_number
-    const prerequisite_course_id= course.department +"-"+course.course_number
-      try {
-          const response = await fetch(`${backendIp}/addCoursePre`, {
-            method: "POST",
-            headers: {
-              "Authorization": `${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ course_id: parent_course_id ,prerequisite: prerequisite_course_id}),
-          });
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-      
-      } catch (error) {
-        console.error("Error adding plan:", error);
+    const parent_course_id = localParentCourse.department + "-" + localParentCourse.course_number
+    const prerequisite_course_id = course.department + "-" + course.course_number
+    try {
+      const response = await fetch(`${backendIp}/addCoursePre`, {
+        method: "POST",
+        headers: {
+          "Authorization": `${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ course_id: parent_course_id, prerequisite: prerequisite_course_id }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
-      finally{
-        setLocalParentCourse(null)
-      }
-    };
+
+    } catch (error) {
+      console.error("Error adding plan:", error);
+    }
+    finally {
+      setLocalParentCourse(null)
+    }
+  };
 
   // Dynamic header based on context
   let header;
   if (localParentCourse) {
     header = (
       <h2 className="text-xl font-semibold mb-4">
-        Select a course to add as prerequisite to {localParentCourse.department+localParentCourse.course_number}
+        Select a course to add as prerequisite to {localParentCourse.department + localParentCourse.course_number}
       </h2>
     );
   } else if (planID) {
@@ -153,7 +194,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse
   }
 
   return (
-    <div className="p-6 bg-white rounded shadow-md w-[75vw] h-[75vh] flex flex-col">
+    <div className="p-6 bg-white rounded shadow-md w-[50vw] h-[50vh] flex flex-col">
       {isCreatingCourse ? (
         <>
           <h2 className="text-xl font-semibold mb-4">Create New Course</h2>
@@ -257,14 +298,33 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse
                     <p className="mt-2 text-sm text-gray-600">No prerequisites</p>
                   )}
                   <div className="mt-4 flex justify-end space-x-2">
-                    {!localParentCourse && (
+                  {(planID && !localParentCourse) && (
                       <button
-                        className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
-                        onClick={() => setLocalParentCourse(course)}
+                        onClick={() => handleAddCourseToPlan(course, planID, planLevel)}
+                        className="bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded"
                       >
-                        Add prerequisite
+                        Add to Plan
                       </button>
                     )}
+
+                    {!localParentCourse && (
+                      <>
+                        <button
+                          className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
+                          onClick={() => setLocalParentCourse(course)}
+                        >
+                          Add prerequisite
+                        </button>
+                        <button
+                          className="bg-red-500 hover:bg-red-600 text-white text-sm py-1 px-3 rounded"
+                          onClick={() => setCourseThatWantToBeDeleted(course)}
+                        >
+                          Delete Course
+                        </button>
+                      </>
+                    )}
+
+
                     {localParentCourse && !(localParentCourse === course) && (
                       <button
                         onClick={() => handleAddingPrerequisite(course, localParentCourse)}
@@ -273,14 +333,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse
                         Add as Prerequisite
                       </button>
                     )}
-                    {(planID && !localParentCourse) && (
-                      <button
-                        onClick={() => handleAddCourseToPlan(course, planID, planLevel)}
-                        className="bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded"
-                      >
-                        Add to Plan
-                      </button>
-                    )}
+
                   </div>
                 </li>
               ))}
@@ -293,8 +346,8 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel ,setIsAddedNewCourse
             Create New Course
           </button>
           {localParentCourse && <button //if there is set prerequist then show this button else hide it
-            onClick={()=>{
-                setLocalParentCourse(null)
+            onClick={() => {
+              setLocalParentCourse(null)
             }}
             className="mt-4 ml-8 bg-gray-400 hover:bg-gray-500 text-black text-sm py-2 px-4 rounded"
           >
