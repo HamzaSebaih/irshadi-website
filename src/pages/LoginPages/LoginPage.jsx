@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { Link } from "react-router-dom";
-import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { useAuth } from "../../contexts/AuthContext";
+import { useNavigate, Link } from "react-router-dom";
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { motion } from "framer-motion";
+import { Eye, EyeOff } from "lucide-react";
+import Lottie from "lottie-react";
+import animationData from "../../assets/Animation.json"; // Correctly imported animation data
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const { login } = useAuth();
@@ -14,156 +18,152 @@ const LoginPage = () => {
   const auth = getAuth();
   const googleProvider = new GoogleAuthProvider();
 
-  async function handleSubmit(e) {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
     try {
       await login(email, password);
-      navigate('/loading');
+      navigate("/loading");
     } catch (error) {
-      setError('The Email address or Passwrod is wrong');
+      setError("The Email address or Password is incorrect");
     }
-  }
+  };
 
-  async function handleGoogleLogin() {
+  const handleGoogleLogin = async () => {
     try {
-        const result = await signInWithPopup(auth, googleProvider);
-
-        // console.log("Sign-in result:", result);
-        // console.log("Is new user:", result.additionalUserInfo?.isNewUser);
-
-        // Check if the email ends with "kau.edu.sa"
-        // if (result.user?.email?.endsWith("kau.edu.sa")) {
-        // }
-        if (result.additionalUserInfo?.isNewUser) {
-          // console.log("Navigating to profile completion page");
-          // navigate('/ProfileCompletionPage');
-          navigate('/loading');
-      } else {
-          // console.log("Navigating to student home page");
-          navigate('/loading');
-      }
-        // else{
-        //   setError("Please ensure to use your univerity account")
-        // }
-        
-        
+      const result = await signInWithPopup(auth, googleProvider);
+      navigate("/loading");
     } catch (error) {
-        console.error("Google Login Error:", error);
-        setError('Failed to login with Google.');
+      console.error("Google Login Error:", error);
+      setError("Failed to login with Google.");
     }
-}
-
-
+  };
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left Section */}
-      <div className="w-1/2 bg-blue-600 p-12 flex flex-col">
-        <h1 className="text-3xl font-bold text-white mb-8">
-          Welcome to<br />Irashadi Platform
-        </h1>
-        <div className="flex-1 flex items-center justify-center">
-          <img
-            src="/api/placeholder/400/400"
-            alt="Runner illustration"
-            className="w-2/3"
-          />
-        </div>
-      </div>
+    <div className="flex min-h-screen bg-gradient-to-br from-blue-100 to-white">
+      {/* Left Panel */}
+      <motion.div
+        initial={{ opacity: 0, x: -100 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 1 }}
+        className="w-1/2 bg-blue-700 text-white p-12 flex flex-col justify-center items-center relative"
+      >
+        <Lottie 
+          animationData={animationData}  // Use the imported animation data here
+          loop 
+          autoplay 
+          className="w-3/4 max-w-md" 
+        />
 
-      {/* Right Section */}
-      <div className="w-1/2 bg-white p-12 flex items-center justify-center">
-        <div className="w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-2">Account Login</h2>
-          <p className="text-gray-600 mb-8">
-            If you are already a member you can login with your email address and password.
+        <h1 className="text-4xl font-extrabold mb-6 leading-tight mt-6">
+          Welcome to <br />
+          <span className="text-blue-300">Irashadi Platform</span>
+        </h1>
+        <p className="text-lg mb-8">Login to continue your journey</p>
+      </motion.div>
+
+      {/* Right Panel */}
+      <motion.div
+        initial={{ opacity: 0, x: 100 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 1 }}
+        className="w-1/2 flex items-center justify-center bg-white"
+      >
+        <div className="bg-white/70 backdrop-blur-lg rounded-xl shadow-lg p-10 w-full max-w-md">
+          <h2 className="text-3xl font-bold mb-2 text-gray-800">Sign In</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            Welcome back! Please enter your details.
           </p>
 
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-100 text-red-700 border border-red-300 p-3 rounded mb-4"
+            >
               {error}
-            </div>
+            </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email address
+              <label htmlFor="email" className="block text-sm mb-1 text-gray-600">
+                Email
               </label>
               <input
                 type="email"
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none transition"
                 required
               />
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <div className="relative">
+              <label htmlFor="password" className="block text-sm mb-1 text-gray-600">
                 Password
               </label>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none transition pr-10"
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
 
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="remember"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="remember" className="ml-2 block text-sm text-gray-700">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="mr-2"
+                />
                 Remember me
               </label>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200"
-            >
-              Login
-            </button>
-
-            <div className="relative flex items-center justify-center">
-              <div className="border-t border-gray-300 w-full"></div>
-              <span className="bg-white px-2 text-sm text-gray-500">Or</span>
-              <div className="border-t border-gray-300 w-full"></div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-50 transition duration-200"
-            >
-              Login with Google
-              <img
-                src="/search.png"
-                alt="Google logo"
-                className="w-5 h-5 ml-2"
-              />
-            </button>
-
-
-            <div className="text-center">
-              <Link to="/ForgetPassPage" className="text-blue-600 hover:text-blue-700 text-sm">
-                Forget your password? Click here
+              <Link to="/ForgetPassPage" className="text-blue-600 text-sm hover:underline">
+                Forgot password?
               </Link>
             </div>
+
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              type="submit"
+              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
+            >
+              Login
+            </motion.button>
+
+            <div className="flex items-center my-4">
+              <hr className="flex-grow border-gray-300" />
+              <span className="mx-2 text-sm text-gray-500">OR</span>
+              <hr className="flex-grow border-gray-300" />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleGoogleLogin}
+              type="button"
+              className="w-full flex items-center justify-center gap-3 border border-gray-300 py-2 rounded-md hover:bg-gray-100 transition"
+            >
+              <img src="/search.png" alt="Google" className="w-5 h-5" />
+              Continue with Google
+            </motion.button>
           </form>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
