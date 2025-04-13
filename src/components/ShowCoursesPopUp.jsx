@@ -14,6 +14,8 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
   const [localParentCourse, setLocalParentCourse] = useState(parentCourse); // Local parent course state
   const [isLoading, setIsLoading] = useState(true);
   const [courseThatWantToBeDeleted, setCourseThatWantToBeDeleted] = useState(null)
+  const [prerequisitesCourseThatWantToBeDeleted,setPrerequisitesCourseThatWantToBeDeleted]=useState(null)
+  const [parentPrerequisitesCourseThatWantToBeDeleted,setParentPrerequisitesCourseThatWantToBeDeleted] = useState(null)
   const { user } = useAuth(); // Get current user from AuthContext
   const token = user?.accessToken; // Access token for backend requests
 
@@ -97,16 +99,55 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
           Authorization: `${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(courseThatWantToBeDeletedTemp),
+        body: JSON.stringify({course_id: courseThatWantToBeDeletedTemp}),
       });
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      setUpdateTheTable(true); 
+      if (!response.ok){
+        if(response.status===409){
+          throw new Error(`Failed to Delete course. Please remove any courses that has this course as prerequisite First.`);
+        }
+      else{
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+    } 
+      setUpdateTheTable(true);
+      alert(courseThatWantToBeDeletedTemp+" course has been delete successfully");
     } catch (error) {
-      console.error("Error creating course:", error);
-      alert("Failed to create course. Please try again.");
+      console.error("Error Deleteing course:", error);
+      alert(error);
     }
   };
 
+  useEffect(()=>{
+    if(prerequisitesCourseThatWantToBeDeleted){
+      handleDeletingPrerequisite().finally(() => {
+        setPrerequisitesCourseThatWantToBeDeleted(null)
+        setParentPrerequisitesCourseThatWantToBeDeleted(null)
+      });
+    }
+  },[prerequisitesCourseThatWantToBeDeleted])
+
+  const handleDeletingPrerequisite = async () => {
+    try {
+      const response = await fetch(`${backendIp}/deleteCoursePre`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({prerequisite_id: prerequisitesCourseThatWantToBeDeleted,course_id: parentPrerequisitesCourseThatWantToBeDeleted}),
+      });
+      if (!response.ok){
+          throw new Error(`Failed to Delete course.`);      
+    } 
+      setUpdateTheTable(true);
+      alert(prerequisitesCourseThatWantToBeDeleted+" course has been delete successfully");
+    } catch (error) {
+      console.error("Error Deleteing course:", error);
+      alert(error);
+    }
+  };
+
+  
 
   // Placeholder handler for adding a course to a plan
   const handleAddCourseToPlan = async (course, planID, planLevel) => {
@@ -163,12 +204,18 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
         },
         body: JSON.stringify({ course_id: parent_course_id, prerequisite: prerequisite_course_id }),
       });
-      if (!response.ok) {
+      if (!response.ok){
+        if(response.status===409){
+          throw new Error(`Failed to add prerequisite course. conflict between two courses.`);
+        }
+      else{
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
+    }
 
     } catch (error) {
       console.error("Error adding plan:", error);
+      alert(error)
     }
     finally {
       setLocalParentCourse(null)
@@ -291,7 +338,13 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
                   {course.prerequisites && course.prerequisites.length > 0 ? (
                     <ul className="mt-2 ml-5 list-disc text-sm text-gray-700">
                       {course.prerequisites.map((prereq, index) => (
-                        <li key={index}>{prereq}</li>
+                        <>
+                        <li key={index}>{prereq}  <button onClick={()=>{
+                          setPrerequisitesCourseThatWantToBeDeleted(prereq)
+                          setParentPrerequisitesCourseThatWantToBeDeleted(course.department+"-"+course.course_number)
+                        }} className="mt-2 bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-1 rounded">Delete</button></li>
+                       
+                        </>
                       ))}
                     </ul>
                   ) : (
