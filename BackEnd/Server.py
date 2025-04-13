@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import collections # For defaultdict
 import traceback # For detailed error logging
-from google import genai
+import google.generativeai as genai
 #End of Importing Section ___________
 
 load_dotenv() # Load environment variables (optional, for production)
