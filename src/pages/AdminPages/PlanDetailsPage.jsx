@@ -16,7 +16,7 @@ const PlanDetailsPage = () => {
   const [isAddedNewCourse, setIsAddedNewCourse] = useState(null)
   const [deleteCourseFromPlan, setDeleteCourseFromPlan] = useState(null);
   const [deleteCourseFromPlanLevel, setDeleteCourseFromPlanLevel] = useState(null);
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [popupMessage, setPopupMessage] = useState();
   const { user } = useAuth(); // Get current user from AuthContext
   const token = user?.accessToken; // Access token for backend requests
@@ -25,12 +25,11 @@ const PlanDetailsPage = () => {
     if (!location.state?.plan?.plan_id) {
       navigate("/AdminStudyPlansPage"); //this where fetching will happnes
     }
-    else {
-      fetchCourses().finally(() => {
-        console.log("m")
-        setIsPopUpClicked(false)
-        setIsLoading(false)
-      });
+    else {      
+      // fetchCourses().finally(() => {
+      //   setIsPopUpClicked(false)
+      //   setIsLoading(false)
+      // });
     }
 
   }, [location, navigate, user]);
@@ -158,7 +157,11 @@ const PlanDetailsPage = () => {
   };
 
 
-  const sortedLevelKeys = Object.keys(planData.levels);
+  const sortedLevelKeys = Object.keys(planData.levels).sort((a, b) => {
+    if (a === "Extra") return 1;
+    if (b === "Extra") return -1;
+    return parseInt(a.split(" ")[1], 10) - parseInt(b.split(" ")[1], 10);
+  })
 
   return (
     <>
