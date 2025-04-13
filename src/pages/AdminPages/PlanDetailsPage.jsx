@@ -13,10 +13,11 @@ const PlanDetailsPage = () => {
   const [planLevel, setPlanLevel] = useState(null);
   const dataFromLocation = location.state
   const [planData, setPlanData] = useState(dataFromLocation?.plan);
-  const [isAddedNewCourse, setIsAddedNewCourse] = useState(false)
+  const [isAddedNewCourse, setIsAddedNewCourse] = useState(null)
   const [deleteCourseFromPlan, setDeleteCourseFromPlan] = useState(null);
   const [deleteCourseFromPlanLevel, setDeleteCourseFromPlanLevel] = useState(null);
   const [isLoading, setIsLoading] = useState(true)
+  const [popupMessage, setPopupMessage] = useState();
   const { user } = useAuth(); // Get current user from AuthContext
   const token = user?.accessToken; // Access token for backend requests
 
@@ -26,13 +27,54 @@ const PlanDetailsPage = () => {
     }
     else {
       fetchCourses().finally(() => {
-        setIsAddedNewCourse(false)
+        console.log("m")
         setIsPopUpClicked(false)
         setIsLoading(false)
       });
     }
 
-  }, [location, navigate, isAddedNewCourse, user]);
+  }, [location, navigate, user]);
+
+  useEffect(() => {
+
+    if (isAddedNewCourse) {
+      console.log(isAddedNewCourse)
+      if (isAddedNewCourse?.alreadyAdded) {
+        setPopupMessage(isAddedNewCourse.course + " course is already in the "+isAddedNewCourse.level)
+      }
+      else if (isAddedNewCourse?.moved) {
+        setPlanData(prev => ({ //here we delete from old level then we add to the new level
+          ...prev,
+          levels: {
+            ...prev.levels,
+            [isAddedNewCourse.oldLevevl]: prev.levels[isAddedNewCourse.oldLevevl].filter(course => course !== isAddedNewCourse.course)
+          }
+        }));
+
+        setPlanData(prev => ({
+          ...prev,
+          levels: {
+            ...prev.levels,
+            [isAddedNewCourse.level]: [...prev.levels[isAddedNewCourse.level], isAddedNewCourse.course]
+          }
+        }));
+        setPopupMessage(isAddedNewCourse.course + "course has been moved from " + isAddedNewCourse.oldLevevl + " To " + isAddedNewCourse.level)
+
+      }
+      else {
+        setPlanData(prev => ({
+          ...prev,
+          levels: {
+            ...prev.levels,
+            [isAddedNewCourse.level]: [...prev.levels[isAddedNewCourse.level], isAddedNewCourse.course]
+          }
+        }));
+        setPopupMessage(isAddedNewCourse.course + "course has been added successfully to " + isAddedNewCourse.level)
+      }
+
+      setIsAddedNewCourse(null)
+    }
+  }, [isAddedNewCourse]);
 
   const fetchCourses = async () => {
     try {
@@ -59,11 +101,29 @@ const PlanDetailsPage = () => {
     }
 
   };
+
+  useEffect(() => {
+    if (popupMessage) {
+      const timer = setTimeout(() => {
+        setPopupMessage(null);
+      }, 3000); //3 sec for the upper message to disaper
+      return () => clearTimeout(timer);
+    }
+  }, [popupMessage]);
+
   useEffect(() => {
     if (deleteCourseFromPlan && deleteCourseFromPlanLevel) {
-      setIsLoading(true)
+      //setIsLoading(true)
+
+      setPlanData(prev => ({
+        ...prev,
+        levels: {
+          ...prev.levels,
+          [deleteCourseFromPlanLevel]: prev.levels[deleteCourseFromPlanLevel].filter(course => course !== deleteCourseFromPlan)
+        }
+      }));
       sendDeleteCourse().finally(() => {
-        setIsLoading(false)
+        //setIsLoading(false)
         setDeleteCourseFromPlan(null);
         setDeleteCourseFromPlanLevel(null);
       });
@@ -83,7 +143,6 @@ const PlanDetailsPage = () => {
           "Content-Type": "application/json",
         }, body: JSON.stringify({ plan_id: location.state?.plan?.plan_id, level_identifier: fixedPlanLevel, course_id: deleteCourseFromPlan }),
       });
-      setIsAddedNewCourse(true)
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
@@ -166,18 +225,37 @@ const PlanDetailsPage = () => {
               onClick={() => setIsPopUpClicked(false)}
             >
               <div
-              onClick={(e) => e.stopPropagation()}>
-              <ShowCoursesPopUp
-                parentCourse={parentCourse}
-                planID={planID}
-                planLevel={planLevel}
-                setIsAddedNewCourse={setIsAddedNewCourse}
-                setIsLoadingForPage={setIsLoading}
-              />
+                onClick={(e) => e.stopPropagation()}>
+                <ShowCoursesPopUp
+                  parentCourse={parentCourse}
+                  planID={planID}
+                  planLevel={planLevel}
+                  setIsAddedNewCourse={setIsAddedNewCourse}
+                  setIsLoadingForPage={setIsLoading}
+                />
+              </div>
             </div>
-            </div>
-  
+
           )}
+
+          {popupMessage && (
+            <div
+              className="fixed top-0 mt-4 left-1/2 transform -translate-x-1/2 
+                       bg-white p-5 
+                       rounded-lg 
+                       shadow-xl
+                       z-50 cursor-pointer"
+              onClick={() => setPopupMessage(null)} 
+            >
+
+              <h1 className="text-xl font-semibold text-center">
+                {popupMessage}
+              </h1>
+
+            </div>
+          )}
+
+
         </div>
       ) : (
         <div className="flex justify-center items-center h-screen">

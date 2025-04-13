@@ -833,13 +833,13 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
             # Check if it's a different level, is a list, and contains the course
             if key != target_level_key and isinstance(value_list, list) and course_id in value_list:
                 old_level_key = key
-                print(f"INFO: Course '{course_id}' found in existing level '{old_level_key}'. Will move to '{target_level_key}'.")
+                print(f"INFO: Course '{course_id}' found in existing level '{old_level_key}'. Will move to '{target_level_key}'. E:101")
                 break # Found it, no need to check further
 
         # --- 4. Prepare Update Payload (Handles Add or Move) ---
         update_data = {}
         message = ""
-
+        frontEndMessage = ""
         # Always add to the target level (ArrayUnion handles duplicates if already there)
         update_data[f'levels.{target_level_key}'] = firestore.ArrayUnion([course_id])
 
@@ -847,10 +847,12 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         if old_level_key:
             update_data[f'levels.{old_level_key}'] = firestore.ArrayRemove([course_id])
             message = f"Course '{course_id}' moved from level '{old_level_key}' to level '{target_level_key}' in plan '{plan_name}'."
+            frontEndMessage ="102"
         else:
             # Check if it was already in the target level (ArrayUnion won't change anything)
             if course_id in levels_map.get(target_level_key, []):
                  message = f"Course '{course_id}' is already present in level '{target_level_key}' of plan '{plan_name}'."
+                 frontEndMessage="101"
             else:
                  message = f"Course '{course_id}' added to level '{target_level_key}' in plan '{plan_name}'."
 
@@ -863,7 +865,7 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         plan_ref.update(update_data)
 
         # --- 6. Return Success Response ---
-        return jsonify({"message": message}), 200 # 200 OK
+        return jsonify({"message": message, "frontEndMessage":frontEndMessage,"old_level_key":old_level_key}), 200 # 200 OK
 
     except Exception as e:
         # Log the error for server-side debugging
