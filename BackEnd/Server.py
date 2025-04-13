@@ -1365,6 +1365,97 @@ def delete_course_from_plan(decoded_token):
         # Return a generic server error message
         return jsonify({"error": "Failed to delete course from plan due to an internal server error", "details": str(e)}), 500
 
+@app.route('/deleteCourse', methods=['POST'])
+@admin_required
+def delete_course_completely(decoded_token):
+    """
+    Deletes a course document from 'Courses' collection AND removes all references
+    to it from the 'levels' maps within all 'Plans' documents.
+    Requires admin authentication.
+    Expects course_id in the JSON request body: {"course_id": "COURSE_ID"}
+    Checks if the course is a prerequisite for others before deleting.
+    NOTE: Using POST for deletion is less conventional than DELETE with ID in URL.
+    """
+    course_id = None # Initialize for error logging
+    try:
+        # --- 1. Get course_id from JSON Request Body ---
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request body"}), 400
+        course_id = data.get('course_id')
+
+        # Validate course_id
+        if not course_id or not isinstance(course_id, str) or not course_id.strip():
+            return jsonify({"error": "Missing or invalid 'course_id' in request body"}), 400
+        course_id = course_id.strip()
+        # --- End course_id retrieval ---
+
+
+        # --- 2. Verify Target Course Exists ---
+        course_ref = db.collection('Courses').document(course_id)
+        course_doc = course_ref.get()
+        if not course_doc.exists:
+             return jsonify({"error": f"Course '{course_id}' not found"}), 404
+
+        # --- 3. Check if Course is a Prerequisite for Other Courses ---
+        dependent_courses_query = db.collection('Courses').where('prerequisites', 'array_contains', course_id).limit(1).stream()
+        dependent_courses = list(dependent_courses_query)
+        if dependent_courses:
+            dependent_course_id = dependent_courses[0].id
+            return jsonify({
+                "error": f"Cannot delete course '{course_id}' because it is listed as a prerequisite for other course(s) (e.g., '{dependent_course_id}'). Please remove dependencies first."
+            }), 409 # 409 Conflict
+
+        # --- 4. Prepare Batch Update for Plans ---
+        batch = db.batch()
+        plans_ref = db.collection('Plans')
+        plans_stream = plans_ref.stream()
+        plans_to_update = False # Flag to check if any plan needs updating
+
+        for plan_doc in plans_stream:
+            plan_data = plan_doc.to_dict()
+            levels_map = plan_data.get('levels', {})
+            plan_needs_update = False # Flag for this specific plan
+            update_payload = {} # Payload for this specific plan
+
+            if isinstance(levels_map, dict):
+                for level_key, course_list in levels_map.items():
+                    if isinstance(course_list, list) and course_id in course_list:
+                        # If course found in this level, add remove operation to payload
+                        update_payload[f'levels.{level_key}'] = firestore.ArrayRemove([course_id])
+                        plan_needs_update = True
+
+            if plan_needs_update:
+                 # Add timestamp update only if other fields are updated
+                 update_payload['last_update_date'] = firestore.SERVER_TIMESTAMP # Use server timestamp
+                 # Add the update operation for this plan to the batch
+                 batch.update(plan_doc.reference, update_payload) # Selected code was here
+                 plans_to_update = True # Mark that at least one plan was modified
+
+        # --- 5. Commit Batch Plan Updates (if any) ---
+        if plans_to_update:
+            print(f"INFO: Removing course '{course_id}' references from one or more plans.")
+            batch.commit() # Atomically update all affected plans
+            print(f"INFO: Plan updates committed for course '{course_id}'.")
+
+
+        # --- 6. Delete the Course Document Itself ---
+        course_ref.delete()
+        print(f"INFO: Course document '{course_id}' deleted.")
+
+        # --- 7. Return Success Response ---
+        return jsonify({"message": f"Course '{course_id}' and all its references in plans deleted successfully"}), 200
+
+    except Exception as e:
+        # Log the error for server-side debugging
+        course_id_local = course_id if 'course_id' in locals() else 'unknown'
+        print(f"Error in /deleteCourse for course_id {course_id_local}: {e}")
+        traceback.print_exc()
+        # Return a generic server error message
+        return jsonify({"error": "Failed to delete course due to an internal server error", "details": str(e)}), 500
+
+
+
 @app.route('/getGraduatingStudents', methods=['POST'])
 @admin_required # Only admins should access this list
 def get_graduating_students_from_form(decoded_token):
