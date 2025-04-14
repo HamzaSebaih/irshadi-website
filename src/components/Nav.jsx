@@ -77,6 +77,16 @@ const Nav = () => {
                   LoginPage
                 </Link>
               </li>
+              
+              <li className="text-gray-300">
+              <Link
+                to="/AdminHomePage"
+                className="hover:text-gray-300 transition duration-300"
+              >
+                HomePage
+              </Link>
+            </li>
+              
             )}
           </ul>
 
