@@ -7,7 +7,6 @@ import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
 import { ExtraInfoProvider } from './contexts/BackEndContext';
 import { AdminRoute,StudentRoute,UserRoute } from './contexts/ProtectedRoute';
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
 import StudentImportRecordPage from './pages/StudnetPages/StudentImportRecordPage';
@@ -17,6 +16,9 @@ import LoadingPage from './pages/LoginPages/LoadingPage';
 import Unauthorized from './pages/LoginPages/Unauthorized';
 import AdminStudyPlansPage from './pages/AdminPages/AdminStudyPlansPage';
 import PlanDetailsPage from './pages/AdminPages/PlanDetailsPage';
+import AboutPage from './pages/About&Terms/AboutPage'
+import TermsPage from './pages/About&Terms/TermsPage'
+
 
 const App = () => {
   return (
@@ -33,6 +35,9 @@ const App = () => {
           <Route path="/ForgetPassPage" element={<ForgetPassPage />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/Loading" element={<LoadingPage />} />
+          <Route path="/About" element={<AboutPage />} />
+          <Route path="/Terms" element={<TermsPage />} />
+
           <Route path="/ProfileCompletionPage" element={
             <StudentRoute>  {/* here we are wrapping up the route to Protect it  */}
               <ProfileCompletionPage />

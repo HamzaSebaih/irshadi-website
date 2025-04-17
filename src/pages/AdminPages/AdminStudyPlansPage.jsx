@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 const AdminStudyPlansPage = () => {
   const backendIp = "http://127.0.0.1:5000"; //this the ip domain for the backend
   const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
-  const token = user.accessToken //we get the token here 
   const [plans, setPlans] = useState([]);
   const [isPopUpForAddingClicked, setIsPopUpForAddingClicked] = useState(false);
   const [planName, setPlanName] = useState(''); // State for the title input
@@ -27,7 +26,7 @@ const AdminStudyPlansPage = () => {
         const response = await fetch(`${backendIp}/getPlans`, {
           method: "GET",
           headers: {
-            "Authorization": `${token}`,
+            "Authorization": `${user.accessToken}`,
             "Content-Type": "application/json",
           },
         });
@@ -49,7 +48,7 @@ const AdminStudyPlansPage = () => {
 
     fetchPlans();
     setUpdatePlanValues(false)
-  }, [updatePlanValues, user, token]);
+  }, [updatePlanValues, user]);
   //END OF LOADING PLANS -------------------------------------------------------------
 
   const onDelete = () => { //this will handle the delete button
@@ -62,7 +61,7 @@ const AdminStudyPlansPage = () => {
         const response = await fetch(`${backendIp}/deletePlan`, {
           method: "POST",
           headers: {
-            "Authorization": `${token}`,
+            "Authorization": `${user.accessToken}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ plan_id: planThatWantToBeDeleted }),
@@ -92,7 +91,7 @@ const AdminStudyPlansPage = () => {
       const response = await fetch(`${backendIp}/addPlan`, {
         method: "POST",
         headers: {
-          "Authorization": `${token}`,
+          "Authorization": `${user.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ plan_name: planName, levels: currentLevel, required_hours: planRequierdHours }),
