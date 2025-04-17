@@ -25,11 +25,12 @@ const PlanDetailsPage = () => {
     if (!location.state?.plan?.plan_id) {
       navigate("/AdminStudyPlansPage"); //this where fetching will happnes
     }
-    else {      
-      // fetchCourses().finally(() => {
-      //   setIsPopUpClicked(false)
-      //   setIsLoading(false)
-      // });
+    else {
+      setIsLoading(true)
+      fetchCourses().finally(() => {
+        setIsPopUpClicked(false)
+        setIsLoading(false)
+      });
     }
 
   }, [location, navigate, user]);

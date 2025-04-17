@@ -402,7 +402,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
             onClick={() => {
               setLocalParentCourse(null)
             }}
-            className="mt-4 ml-8 bg-gray-400 hover:bg-gray-500 text-black text-sm py-2 px-4 rounded"
+            className="mt-4 bg-gray-400 hover:bg-gray-500 text-black text-sm py-2 px-4 rounded"
           >
             Cancel
           </button>}
