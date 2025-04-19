@@ -1104,15 +1104,17 @@ def get_forms(decoded_token): # admin_required provides decoded_token
 
 @app.route('/editForm', methods=['PATCH']) # Using PATCH for partial updates
 @admin_required
-def edit_form(decoded_token): # admin_required provides decoded_token
+def edit_form(decoded_token): # admin_required provides decoded_token (though not used here)
     """
-    Updates specific fields (title, description, start_date, end_date) of an existing form.
+    Updates specific fields (title, description, start_date, end_date, etc.) of an existing form.
     Requires admin privileges.
     Expects JSON containing 'form_id' and at least one field to update:
     {"form_id": "FORM_ID", "title": "New Title", "end_date": "YYYY-MM-DD", ...}
     Only updates the fields provided in the request.
+    Validates that if both start_date and end_date are updated, end_date >= start_date.
     Adds a 'last_modified' timestamp.
     """
+    form_id = None # Initialize for error logging
     try:
         # --- 1. Get and Validate Input ---
         data = request.get_json()
@@ -1134,7 +1136,9 @@ def edit_form(decoded_token): # admin_required provides decoded_token
 
         # --- 3. Prepare Update Data ---
         update_data = {}
-        allowed_fields = ["title", "description", "start_date", "end_date"]
+        # Include all fields that can be edited now
+        allowed_fields = ["title", "description", "start_date", "end_date",
+                          "max_hours", "max_graduate_hours", "expected_students"] # Added hour/student fields
         found_update = False
 
         # Process optional fields
@@ -1147,17 +1151,19 @@ def edit_form(decoded_token): # admin_required provides decoded_token
 
         if 'description' in data:
             description = data['description']
-            if not isinstance(description, str): # Allow empty description? Assuming yes.
+            if not isinstance(description, str): # Allow empty description
                  return jsonify({"error": "Invalid 'description' (must be a string)"}), 400
             update_data['description'] = description
             found_update = True
 
+        # Process date fields
         if 'start_date' in data:
             start_date_str = data['start_date']
             if not isinstance(start_date_str, str):
                  return jsonify({"error": "Invalid 'start_date' (must be a string)"}), 400
             try:
                 start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d")
+                # Convert to Firestore Timestamp (UTC)
                 update_data['start_date'] = datetime.combine(start_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
                 found_update = True
             except ValueError:
@@ -1169,17 +1175,44 @@ def edit_form(decoded_token): # admin_required provides decoded_token
                  return jsonify({"error": "Invalid 'end_date' (must be a string)"}), 400
             try:
                 end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d")
+                # Convert to Firestore Timestamp (UTC)
                 update_data['end_date'] = datetime.combine(end_datetime.date(), datetime.min.time(), tzinfo=timezone.utc)
                 found_update = True
             except ValueError:
                 return jsonify({"error": "Invalid 'end_date' format. Please use YYYY-MM-DD"}), 400
 
-        # Optional: Add cross-validation for dates if both are provided
-        # E.g., check if update_data['end_date'] < update_data['start_date']
+        # Process numeric fields added previously to /addForm
+        if 'max_hours' in data:
+             max_hours = data['max_hours']
+             if not isinstance(max_hours, int) or max_hours <= 0:
+                  return jsonify({"error": "'max_hours' must be a positive integer"}), 400
+             update_data['max_hours'] = max_hours
+             found_update = True
+
+        if 'max_graduate_hours' in data:
+             max_graduate_hours = data['max_graduate_hours']
+             if not isinstance(max_graduate_hours, int) or max_graduate_hours <= 0:
+                  return jsonify({"error": "'max_graduate_hours' must be a positive integer"}), 400
+             update_data['max_graduate_hours'] = max_graduate_hours
+             found_update = True
+
+        if 'expected_students' in data:
+             expected_students = data['expected_students']
+             if not isinstance(expected_students, int) or expected_students < 0:
+                  return jsonify({"error": "'expected_students' must be a non-negative integer"}), 400
+             update_data['expected_students'] = expected_students
+             found_update = True
+
+        # --- Cross-validate dates IF BOTH were provided in this update request ---
+        if 'start_date' in update_data and 'end_date' in update_data:
+            if update_data['end_date'] < update_data['start_date']:
+                return jsonify({"error": "New 'end_date' cannot be before new 'start_date'"}), 400
+        # --- End date cross-validation ---
 
         # Check if any valid fields were provided for update
         if not found_update:
-            return jsonify({"error": "No valid fields provided for update. Allowed fields: title, description, start_date, end_date"}), 400
+            # Updated error message to include all editable fields
+            return jsonify({"error": f"No valid fields provided for update. Allowed fields: {', '.join(allowed_fields)}"}), 400
 
         # Add a timestamp for the modification
         update_data['last_modified'] = datetime.now(timezone.utc)
@@ -1192,7 +1225,9 @@ def edit_form(decoded_token): # admin_required provides decoded_token
 
     except Exception as e:
         # Log the error for server-side debugging
-        print(f"Error in /editForm for form_id '{form_id if 'form_id' in locals() else 'unknown'}': {e}")
+        form_id_local = form_id if 'form_id' in locals() else 'unknown'
+        print(f"Error in /editForm for form_id '{form_id_local}': {e}")
+        traceback.print_exc()
         # Return a generic server error message
         return jsonify({"error": "Failed to edit form due to an internal server error", "details": str(e)}), 500
 
