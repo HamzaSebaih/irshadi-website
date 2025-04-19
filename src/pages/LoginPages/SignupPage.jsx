@@ -59,7 +59,7 @@ const SignupPage = () => {
     try {
       await signup(email, password);
       console.log("Email/Password Signup Successful");
-      navigate("/loading");
+      navigate("/ProfileCompletionPage");
     } catch (error) {
       console.error("Email/Password Signup Error:", error.code, error.message);
       const msg =
@@ -74,7 +74,7 @@ const SignupPage = () => {
     try {
       await signInWithPopup(auth, googleProvider);
       console.log("Google Signup Successful");
-      navigate("/loading");
+      navigate("/ProfileCompletionPage");
     } catch (error) {
       console.error("Google Signup Error:", error.code, error.message);
       if (error.code === "auth/account-exists-with-different-credential") {
