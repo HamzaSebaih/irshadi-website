@@ -18,20 +18,7 @@ const ProfileCompletionPage = () => {
   const auth = getAuth();
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserProfile((prev) => ({
-          ...prev,
-          fullName: user.displayName || "",
-          email: user.email || ""
-        }));
-      } else {
-        navigate("/login");
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -69,7 +56,7 @@ const ProfileCompletionPage = () => {
           await linkWithCredential(user, credential);
 
           // Navigate to loading page after successful linking
-          navigate("/loading");
+       //  navigate("/loading");
         } else {
           throw new Error("No user is currently signed in");
         }

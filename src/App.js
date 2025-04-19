@@ -18,6 +18,7 @@ import AdminStudyPlansPage from './pages/AdminPages/AdminStudyPlansPage';
 import PlanDetailsPage from './pages/AdminPages/PlanDetailsPage';
 import AboutPage from './pages/About&Terms/AboutPage'
 import TermsPage from './pages/About&Terms/TermsPage'
+import SignUpPage from './pages/LoginPages/SignupPage';
 
 
 const App = () => {
@@ -32,16 +33,15 @@ const App = () => {
             <LoginPage />
             </UserRoute>
             } />
+          <Route path="/SignupPage" element={<SignUpPage />} />
           <Route path="/ForgetPassPage" element={<ForgetPassPage />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/Loading" element={<LoadingPage />} />
           <Route path="/About" element={<AboutPage />} />
           <Route path="/Terms" element={<TermsPage />} />
+          <Route path="/ProfileCompletionPage" element={<ProfileCompletionPage />} />
 
-          <Route path="/ProfileCompletionPage" element={
-            <StudentRoute>  {/* here we are wrapping up the route to Protect it  */}
-              <ProfileCompletionPage />
-            </StudentRoute>} />
+        
 
           <Route path="/StudentImportRecordPage" element={
             <StudentRoute> {/* here we are wrapping up the route to Protect it  */}

@@ -29,16 +29,23 @@ const LoginPage = () => {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  async function handleGoogleLogin() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      navigate("/loading");
+  
+      // Check if it's a new user
+      if (result.additionalUserInfo?.isNewUser) {
+        navigate('/ProfileCompletionPage');
+      } else {
+        navigate('/loading');
+      }
     } catch (error) {
-      console.error("Google Login Error:", error);
-      setError("Failed to login with Google.");
+      setError('Failed to login with Google.');
     }
-  };
+  }
+  
 
+  ;
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-blue-100 to-white">
       {/* Left Panel */}
@@ -48,13 +55,12 @@ const LoginPage = () => {
         transition={{ duration: 1 }}
         className="w-1/2 bg-blue-700 text-white p-12 flex flex-col justify-center items-center relative"
       >
-        <Lottie 
-          animationData={animationData}  // Use the imported animation data here
-          loop 
-          autoplay 
-          className="w-3/4 max-w-md" 
+        <Lottie
+          animationData={animationData}
+          loop
+          autoplay
+          className="w-3/4 max-w-md"
         />
-
         <h1 className="text-4xl font-extrabold mb-6 leading-tight mt-6">
           Welcome to <br />
           <span className="text-blue-300">Irashadi Platform</span>
@@ -133,6 +139,14 @@ const LoginPage = () => {
               </label>
               <Link to="/ForgetPassPage" className="text-blue-600 text-sm hover:underline">
                 Forgot password?
+              </Link>
+            </div>
+
+            {/* 👇 Added Sign Up link here */}
+            <div className="text-center text-sm text-blue-600 mt-4">
+              Don’t have an account?{" "}
+              <Link to="/SignupPage" className="font-semibold hover:underline">
+                Sign up
               </Link>
             </div>
 
