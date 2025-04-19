@@ -6,7 +6,6 @@ import { useAuth } from '../../contexts/AuthContext';
 const StudentImportRecordPage = () => {
   const backendIp = "http://127.0.0.1:5000"; //this the ip domain for the backend
   const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
-  const token = user.accessToken //we get the token here 
   const [oneTimeCode, setOneTimeCode] = useState(null); //we use this to update the data and get the one time code from the backend 
 
   const handle_one_time_code_generating = () => { //this fucntion is actviated when we click on the generate button 
@@ -16,11 +15,12 @@ const StudentImportRecordPage = () => {
   }
 
   const fetchData = async () => {
-    try { //try to avoids any errors 
+    try { //try to avoids any errors
+      const token = await user.getIdToken();
       const response = await fetch(backendIp + "/generateCode", { //call the back-end path that will generate code
         method: "POST", //using post
         headers: {
-          "Authorization": `${token}`, // Include token to verify the user
+          "Authorization": `${token}`, // we include token to verify the user
           "Content-Type": "application/json",
         },
       });

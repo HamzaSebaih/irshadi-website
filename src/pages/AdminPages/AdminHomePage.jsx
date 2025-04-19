@@ -34,10 +34,11 @@ const AdminHomePage = () => {
   // Function to fetch courses from the backend
   const fetchForms = async () => {
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/getForms`, {
         method: "GET",
         headers: {
-          Authorization: `${user.accessToken}`,
+          Authorization: `${token}`,
           "Content-Type": "application/json",
         },
       });
@@ -51,10 +52,11 @@ const AdminHomePage = () => {
   };
   const fetchPlans = async () => {
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/getPlans`, {
         method: "GET",
         headers: {
-          "Authorization": `${user.accessToken}`,
+          "Authorization": `${token}`,
           "Content-Type": "application/json",
         },
       });
@@ -77,10 +79,11 @@ const AdminHomePage = () => {
   const handleDeleteConfirmed = async () => { //this will send the plan details to the backend
     try {
       if (formThatWantToBeDeleted) {
+        const token = await user.getIdToken();
         const response = await fetch(`${backendIp}/deleteForm`, {
           method: "POST",
           headers: {
-            "Authorization": `${user.accessToken}`,
+            "Authorization": `${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ form_id: formThatWantToBeDeleted }),
@@ -95,7 +98,14 @@ const AdminHomePage = () => {
       console.error("Error adding plan:", error);
     }
   };
-
+  const formatDate = (inputDateString) => {
+    const date = new Date(inputDateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // month is 0-indexed
+    const day = String(date.getDate()).padStart(2, '0');
+  
+    return `${year}-${month}-${day}`;
+  }
   const handleSubmitForm = () => {
     if (newFormStartDate && newFormEndDate) {
       const start = new Date(newFormStartDate);
@@ -150,6 +160,45 @@ const AdminHomePage = () => {
       console.error("Error adding plan:", error);
     }
   };
+  const handleEditForm = async () =>{
+    console.log(formThatWantToBeEdited)
+      const start = new Date(formatDate(formThatWantToBeEdited.start_date));
+      const end = new Date(formatDate(formThatWantToBeEdited.end_date));
+
+      if (end < start) {
+        alert('Please make sure the Start is before The End Date');
+      }
+      else{
+        try {
+          const token = await user.getIdToken();
+          const body = {
+            form_id: formThatWantToBeEdited.form_id,
+            title: formThatWantToBeEdited.title,
+            description: formThatWantToBeEdited.description,
+            start_date: formatDate(formThatWantToBeEdited.start_date),
+            end_date: formatDate(formThatWantToBeEdited.end_date),
+          };
+          const response = await fetch(`${backendIp}/editForm`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ...body }),
+          });
+          setUpdateTheTable(true)
+          setIsPopUpForEditingClicked(false)
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+    
+        } catch (error) {
+          console.error("Error adding plan:", error);
+        }
+      }
+    
+    
+  };
   return (
     <>
       {!isLoading ? (
@@ -172,8 +221,8 @@ const AdminHomePage = () => {
 
                   {/* Dates */}
                   <div className="mt-4 flex flex-col space-y-1 text-sm text-gray-500">
-                    <span><strong>Start:</strong> {form.start_date}</span>
-                    <span><strong>End:</strong> {form.end_date}</span>
+                    <span><strong>Start:</strong> {formatDate(form.start_date)}</span>
+                    <span><strong>End:</strong> {formatDate(form.end_date)}</span>
                   </div>
 
                   {/* Responses and Expected Students */}
@@ -197,7 +246,7 @@ const AdminHomePage = () => {
                     <button
                       className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
                       onClick={() => {
-                        setFormThatWantToBeEdited(form.form_id);
+                        setFormThatWantToBeEdited(form);
                         setIsPopUpForEditingClicked(true)
                       }}
                     >
@@ -205,7 +254,7 @@ const AdminHomePage = () => {
                     </button>
 
                     <button
-                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition"
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
                       onClick={() => {
                         setFormThatWantToPrintReport(form.form_id);
                         setIsPopUpForReportsClicked(true)
@@ -442,19 +491,68 @@ const AdminHomePage = () => {
             className="bg-white p-6 rounded-lg shadow-lg w-96"
             onClick={(e) => e.stopPropagation()} // prevents the button from triggering click event on parent elements
           >
-            <h2 className="text-xl font-bold mb-4">Add New Plan</h2>
+            <h2 className="text-xl font-bold mb-4">Edit Form</h2>
 
             <div className="mb-4">
               <label htmlFor="title" className="block text-gray-700 mb-2">Title</label>
               <input
                 type="text"
                 id="title"
-                value={newFormName}
-                onChange={(e) => setNewFormName(e.target.value)}
+                value={formThatWantToBeEdited.title}
+                onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
+                  ...prevForm, // keep the existing properties
+                  title: e.target.value, 
+                }))}
                 className="w-full p-2 border rounded"
                 placeholder="Enter plan title"
               />
             </div>
+
+            <div className="mb-4">
+                <label htmlFor="description" className="block text-gray-700 mb-2">Description</label>
+                <textarea
+                  id="description"
+                  value={formThatWantToBeEdited.description}
+                  onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
+                    ...prevForm, // keep the existing properties
+                    description: e.target.value, 
+                  }))}
+                  className="w-full p-2 border rounded"
+                  placeholder="Enter description"
+                  required
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="start_date" className="block text-gray-700 mb-2">Start Date</label>
+                <input
+                  type="date"
+                  id="start_date"
+                  value={formatDate(formThatWantToBeEdited.start_date)}
+                  onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
+                    ...prevForm, // keep the existing properties
+                    start_date: e.target.value, 
+                  }))}
+                  className="w-full p-2 border rounded"
+                  required
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="end_date" className="block text-gray-700 mb-2">End Date</label>
+                <input
+                  type="date"
+                  id="end_date"
+                  value={formatDate(formThatWantToBeEdited.end_date)}
+                  onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
+                    ...prevForm, // keep the existing properties
+                    end_date: e.target.value, 
+                  }))}
+                  className="w-full p-2 border rounded"
+                  required
+                />
+              </div>
+
             
             <div className="flex justify-end gap-2">
               <button
@@ -464,10 +562,10 @@ const AdminHomePage = () => {
                 Cancel
               </button>
               <button
-                onClick={console.log("WIP")}
+                onClick={handleEditForm}
                 className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
-                Edit Form
+                Confirm
               </button>
             </div>
           </div>

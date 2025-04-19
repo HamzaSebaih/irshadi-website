@@ -19,7 +19,6 @@ const PlanDetailsPage = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [popupMessage, setPopupMessage] = useState();
   const { user } = useAuth(); // Get current user from AuthContext
-  const token = user?.accessToken; // Access token for backend requests
 
   useEffect(() => {
     if (!location.state?.plan?.plan_id) {
@@ -78,6 +77,7 @@ const PlanDetailsPage = () => {
 
   const fetchCourses = async () => {
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/getPlans`, {
         method: "GET",
         headers: {
@@ -136,6 +136,7 @@ const PlanDetailsPage = () => {
     }
 
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/deleteCourseFromPlan`, {
         method: "POST",
         headers: {
