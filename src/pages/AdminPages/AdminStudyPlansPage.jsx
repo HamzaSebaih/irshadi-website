@@ -14,7 +14,8 @@ const AdminStudyPlansPage = () => {
   const [deleteConfirmPopUp, setDeleteConfirmPopUp] = useState(false)
   const [planThatWantToBeDeleted, setPlanThatWantToBeDeleted] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-
+  const MIN_LEVEL = 1;
+  const MAX_LEVEL = 16;
   useEffect(() => { // this block of code will work only when entering the page 
     //it will load all the avalable plans from the backend server 
     // If there's no authenticated user then clear the extra info.
@@ -111,8 +112,7 @@ const AdminStudyPlansPage = () => {
     }
   };
 
-  const MIN_LEVEL = 1;
-  const MAX_LEVEL = 16;
+
 
   const handleDecrement = () => {
     if (currentLevel > MIN_LEVEL) {
