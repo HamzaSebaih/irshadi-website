@@ -24,10 +24,11 @@ const AdminStudyPlansPage = () => {
     }
     const fetchPlans = async () => {
       try {
+        const token = await user.getIdToken();
         const response = await fetch(`${backendIp}/getPlans`, {
           method: "GET",
           headers: {
-            "Authorization": `${user.accessToken}`,
+            "Authorization": `${token}`,
             "Content-Type": "application/json",
           },
         });
@@ -59,10 +60,11 @@ const AdminStudyPlansPage = () => {
   const handleDeleteConfirmed = async () => { //this will send the plan details to the backend
     try {
       if (planThatWantToBeDeleted) {
+        const token = await user.getIdToken();
         const response = await fetch(`${backendIp}/deletePlan`, {
           method: "POST",
           headers: {
-            "Authorization": `${user.accessToken}`,
+            "Authorization": `${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ plan_id: planThatWantToBeDeleted }),
@@ -89,10 +91,11 @@ const AdminStudyPlansPage = () => {
   const handleAddPlan = async () => { //this will send the plan details to the backend
     try {
       // console.log("planName: "+planName+ " currentLevel "+currentLevel+" required_hours "+ planRequierdHours)
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/addPlan`, {
         method: "POST",
         headers: {
-          "Authorization": `${user.accessToken}`,
+          "Authorization": `${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ plan_name: planName, levels: currentLevel, required_hours: planRequierdHours }),

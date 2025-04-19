@@ -17,8 +17,6 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
   const [prerequisitesCourseThatWantToBeDeleted,setPrerequisitesCourseThatWantToBeDeleted]=useState(null)
   const [parentPrerequisitesCourseThatWantToBeDeleted,setParentPrerequisitesCourseThatWantToBeDeleted] = useState(null)
   const { user } = useAuth(); // Get current user from AuthContext
-  const token = user?.accessToken; // Access token for backend requests
-
   // Fetch courses when updateTheTable changes
   useEffect(() => {
     if (!user) return;
@@ -30,6 +28,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
   const fetchCourses = async () => {
     setIsLoading(true); // Start loading
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/getCourses`, {
         method: "GET",
         headers: {
@@ -61,6 +60,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
       hours: parseInt(hours),
     };
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/addCourse`, {
         method: "POST",
         headers: {
@@ -93,6 +93,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
   const handleDeleteCourse = async () => {
     const courseThatWantToBeDeletedTemp = courseThatWantToBeDeleted.department +"-"+courseThatWantToBeDeleted.course_number
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/deleteCourse`, {
         method: "POST",
         headers: {
@@ -128,6 +129,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
 
   const handleDeletingPrerequisite = async () => {
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/deleteCoursePre`, {
         method: "POST",
         headers: {
@@ -159,6 +161,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
       fixedPlanLevel = parseInt(planLevel.replace("Level", "").trim());
     }
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/addCourseToPlanLevel`, {
         method: "POST",
         headers: {
@@ -196,6 +199,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
     const parent_course_id = localParentCourse.department + "-" + localParentCourse.course_number
     const prerequisite_course_id = course.department + "-" + course.course_number
     try {
+      const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/addCoursePre`, {
         method: "POST",
         headers: {
