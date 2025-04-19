@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
 import animationData from "../../assets/Animation.json"; // Correctly imported animation data
+import ProfileCompletionPage from "./ProfileCompletionPage";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -32,18 +33,18 @@ const LoginPage = () => {
   async function handleGoogleLogin() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-  
-      // Check if it's a new user
-      if (result.additionalUserInfo?.isNewUser) {
-        navigate('/ProfileCompletionPage');
-      } else {
-        navigate('/loading');
-      }
+
+       //Check if it's a new user
+           if (result.additionalUserInfo?.isNewUser) {
+      navigate('/ProfileCompletionPage'); 
+           } else {
+         navigate('/loading');
+       }
     } catch (error) {
       setError('Failed to login with Google.');
     }
   }
-  
+
 
   ;
   return (
