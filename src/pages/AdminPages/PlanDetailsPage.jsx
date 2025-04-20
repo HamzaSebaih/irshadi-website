@@ -25,10 +25,10 @@ const PlanDetailsPage = () => {
       navigate("/AdminStudyPlansPage"); //this where fetching will happnes
     }
     else {
-      setIsLoading(true)
-      fetchCourses().finally(() => {
-        setIsPopUpClicked(false)
-        setIsLoading(false)
+        setIsLoading(true)
+        fetchCourses().finally(() => {
+            setIsPopUpClicked(false)
+            setIsLoading(false)
       });
     }
 
@@ -42,7 +42,7 @@ const PlanDetailsPage = () => {
         setPopupMessage(isAddedNewCourse.course + " course is already in the "+isAddedNewCourse.level)
       }
       else if (isAddedNewCourse?.moved) {
-        setPlanData(prev => ({ //here we delete from old level then we add to the new level
+        setPlanData(prev => ({
           ...prev,
           levels: {
             ...prev.levels,
@@ -57,7 +57,7 @@ const PlanDetailsPage = () => {
             [isAddedNewCourse.level]: [...prev.levels[isAddedNewCourse.level], isAddedNewCourse.course]
           }
         }));
-        setPopupMessage(isAddedNewCourse.course + "course has been moved from " + isAddedNewCourse.oldLevevl + " To " + isAddedNewCourse.level)
+        setPopupMessage(isAddedNewCourse.course + " course has been moved from " + isAddedNewCourse.oldLevevl + " To " + isAddedNewCourse.level)
 
       }
       else {
@@ -65,10 +65,10 @@ const PlanDetailsPage = () => {
           ...prev,
           levels: {
             ...prev.levels,
-            [isAddedNewCourse.level]: [...prev.levels[isAddedNewCourse.level], isAddedNewCourse.course]
+            [isAddedNewCourse.level]: [...(prev.levels?.[isAddedNewCourse.level] || []), isAddedNewCourse.course]
           }
         }));
-        setPopupMessage(isAddedNewCourse.course + "course has been added successfully to " + isAddedNewCourse.level)
+        setPopupMessage(isAddedNewCourse.course + " course has been added successfully to " + isAddedNewCourse.level)
       }
 
       setIsAddedNewCourse(null)
@@ -94,10 +94,13 @@ const PlanDetailsPage = () => {
       const matchingPlan = data.plans.find(plan => plan.plan_id === location.state?.plan?.plan_id);
       if (matchingPlan) {
         setPlanData(matchingPlan);
+      } else {
+          console.warn("Plan not found after fetch, navigating back.");
+          navigate("/AdminStudyPlansPage");
       }
 
     } catch (error) {
-      console.error("Error fetching extra info:", error);
+      console.error("Error fetching plan details:", error);
     }
 
   };
@@ -129,6 +132,7 @@ const PlanDetailsPage = () => {
       });
     }
   }, [deleteCourseFromPlan, deleteCourseFromPlanLevel]);
+
   const sendDeleteCourse = async () => {
     let fixedPlanLevel = deleteCourseFromPlanLevel;
     if (fixedPlanLevel.startsWith("Level")) {
@@ -148,8 +152,11 @@ const PlanDetailsPage = () => {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       const data = await response.json();
+      console.log("Delete course response:", data);
     } catch (error) {
-      console.error("Error fetching extra info:", error);
+      console.error("Error deleting course from plan:", error);
+      alert(`Failed to delete course: ${error.message}`);
+       fetchCourses();
     }
 
   };
@@ -159,78 +166,103 @@ const PlanDetailsPage = () => {
   };
 
 
-  const sortedLevelKeys = Object.keys(planData.levels).sort((a, b) => {
+  const sortedLevelKeys = planData?.levels ? Object.keys(planData.levels).sort((a, b) => {
     if (a === "Extra") return 1;
     if (b === "Extra") return -1;
-    return parseInt(a.split(" ")[1], 10) - parseInt(b.split(" ")[1], 10);
-  })
+    const levelA = parseInt(a.split(" ")[1], 10);
+    const levelB = parseInt(b.split(" ")[1], 10);
+    if (isNaN(levelA)) return 1;
+    if (isNaN(levelB)) return -1;
+    return levelA - levelB;
+  }) : [];
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (!planData) {
+    return (
+         <div className="flex min-h-screen items-center justify-center bg-gray-100">
+            <p className="text-gray-600">Loading plan details...</p>
+        </div>
+    );
+  }
+
 
   return (
     <>
-      {!isLoading ? (
-        <div className="container mx-auto p-4">
-          {/* Header */}
-          <div className="text-center my-4">
-            <h1 className="text-3xl font-bold">{planData.plan_id}</h1>
+      <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+        <div className="container mx-auto max-w-6xl">
+
+          <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">
+            <h1 className="text-2xl font-bold text-primary-dark md:text-3xl">{planData.plan_id}</h1>
+            <p className="mt-1 text-sm text-gray-500">Manage courses for each level</p>
+             <button
+                onClick={() => navigate("/AdminStudyPlansPage")}
+                className="mt-4 inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1 font-medium text-gray-700 shad  ow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
+            >
+                &larr; Back to Plans
+            </button>
           </div>
 
-          {/* Levels */}
-          <div className="space-y-8">
+          <div className="space-y-6">
             {sortedLevelKeys.map((levelKey) => (
-              <div key={levelKey} className="bg-gray-100 rounded-lg p-6 shadow">
-                <div className="mb-4">
-                  <h2 className="text-3xl font-semibold">{levelKey}</h2>
+              <div key={levelKey} className="rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
+                  <h2 className="text-lg font-semibold leading-6 text-gray-800">{levelKey}</h2>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 gap-4">
-                  {planData.levels[levelKey].map((course, index) => (
-                    <div key={index} className="bg-white p-6 border rounded shadow">
-                      <div className="bg-white p-4 border rounded shadow flex justify-between items-center">
-                        <span className="text-lg font-medium">{course}</span>
+                <div className="p-4 sm:p-6">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {(planData.levels[levelKey] || []).map((course, index) => (
+                        <div key={index} className="flex items-center justify-between rounded-md border border-gray-300 bg-white p-3 shadow-sm">
+                        <span className="text-sm font-medium text-gray-900">{course}</span>
                         <button
-                          onClick={() => {
-                            setDeleteCourseFromPlanLevel(levelKey)
-                            setDeleteCourseFromPlan(course);
-                          }}
-                          className="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded"
+                            onClick={() => {
+                                setDeleteCourseFromPlanLevel(levelKey);
+                                setDeleteCourseFromPlan(course);
+                            }}
+                            title={`Delete ${course}`}
+                            className="ml-2 rounded-md p-1 text-danger hover:bg-danger/10 focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-1"
                         >
-                          Delete
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                         </button>
-                      </div>
+                        </div>
+                    ))}
+
+                    <button
+                        onClick={() => {
+                        setPlanLevel(levelKey);
+                        setPlanID(location.state?.plan?.plan_id);
+                        setParentCourse(null);
+                        setIsPopUpClicked(true);
+                        }}
+                        title={`Add course to ${levelKey}`}
+                        className="flex items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-white p-3 text-gray-400 shadow-sm transition hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                    >
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                         </svg>
+                         <span className="ml-2 text-sm font-medium">Add Course</span>
+                    </button>
                     </div>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setPlanLevel(levelKey);
-                      setPlanID(location.state?.plan?.plan_id);
-                      setParentCourse(null);
-                      setIsPopUpClicked(true);
-                    }}
-                    className="flex items-center justify-center bg-white p-4 border rounded shadow hover:border-blue-300 hover:shadow-md transition"
-                  >
-                    <p className="w-20 h-20 flex items-center justify-center rounded-full bg-blue-500 text-white font-bold shadow">+</p>
-                  </button>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Confirm Button */}
-          <div className="mt-6 text-center">
-            <button
-              onClick={handleClickConfirm}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
-            >
-              Confirm
-            </button>
-          </div>
 
           {isPopUpClicked && (
             <div
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
               onClick={() => setIsPopUpClicked(false)}
             >
-              <div
-                onClick={(e) => e.stopPropagation()}>
+              <div onClick={(e) => e.stopPropagation()}>
                 <ShowCoursesPopUp
                   parentCourse={parentCourse}
                   planID={planID}
@@ -245,28 +277,17 @@ const PlanDetailsPage = () => {
 
           {popupMessage && (
             <div
-              className="fixed top-0 mt-4 left-1/2 transform -translate-x-1/2 
-                       bg-white p-5 
-                       rounded-lg 
-                       shadow-xl
-                       z-50 cursor-pointer"
-              onClick={() => setPopupMessage(null)} 
+              className="fixed bottom-5 left-1/2 z-50 w-auto -translate-x-1/2 transform cursor-pointer rounded-lg bg-secondary p-4 text-center text-sm font-medium text-gray-800 shadow-lg"
+              onClick={() => setPopupMessage(null)}
             >
-
-              <h1 className="text-xl font-semibold text-center">
-                {popupMessage}
-              </h1>
-
+              {popupMessage}
             </div>
           )}
 
 
         </div>
-      ) : (
-        <div className="flex justify-center items-center h-screen">
-          <div className="w-16 h-16 border-4 border-t-transparent border-blue-500 border-solid rounded-full animate-spin"></div>
-        </div>
-      )}
+      </div>
+
     </>
   );
 }

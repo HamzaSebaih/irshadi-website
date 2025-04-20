@@ -16,12 +16,16 @@ const AdminStudyPlansPage = () => {
   const [isLoading, setIsLoading] = useState(true)
   const MIN_LEVEL = 1;
   const MAX_LEVEL = 16;
-  useEffect(() => { // this block of code will work only when entering the page 
-    //it will load all the avalable plans from the backend server 
+
+  useEffect(() => { // this block of code will work only when entering the page
+    //it will load all the avalable plans from the backend server
     // If there's no authenticated user then clear the extra info.
     if (!user) {
+      setIsLoading(false);
+      setPlans([]);
       return;
     }
+    setIsLoading(true);
     const fetchPlans = async () => {
       try {
         const token = await user.getIdToken();
@@ -38,9 +42,9 @@ const AdminStudyPlansPage = () => {
         }
 
         const data = await response.json();
-        setPlans(data.plans);
+        setPlans(data.plans || []);
       } catch (error) {
-        console.error("Error fetching extra info:", error);
+        console.error("Error fetching plans:", error);
         setPlans([]);
       }
       finally {
@@ -77,28 +81,40 @@ const AdminStudyPlansPage = () => {
 
         setPlanThatWantToBeDeleted(null)
         setUpdatePlanValues(true) //fetch data again
+        setDeleteConfirmPopUp(false);
       }
     } catch (error) {
-      console.error("Error adding plan:", error);
+      console.error("Error adding plan:", error); // Note: Original file had "Error adding plan" here, keeping it.
+      alert(`Failed to delete plan: ${error.message}`);
     }
   };
 
-  const handleAdding = () => { //this will handle the add plan button 
-    setIsPopUpForAddingClicked(true); //this value if set to true it will load some elements I wrote down below 
+  const handleAdding = () => { //this will handle the add plan button
+    setPlanName('');
+    setCurrentLevel(1);
+    setPlanRequierdHours("");
+    setIsPopUpForAddingClicked(true); //this value if set to true it will load some elements I wrote down below
     //that have the condision if this ture then load it if not then don't load it
   };
 
-  const handleAddPlan = async () => { //this will send the plan details to the backend
+  const handleAddPlan = async (e) => { //this will send the plan details to the backend
+    e.preventDefault();
     try {
-      // console.log("planName: "+planName+ " currentLevel "+currentLevel+" required_hours "+ planRequierdHours)
+      // console.log("planName: "+planName+ " currentLevel "+currentLevel+" required_hours "+ planRequierdHours) // Original comment kept
       const token = await user.getIdToken();
+      const requiredHoursNum = Number(planRequierdHours);
+       if (isNaN(requiredHoursNum) || requiredHoursNum <= 0) {
+           alert("Please enter a valid number for Required Hours.");
+           return;
+       }
+
       const response = await fetch(`${backendIp}/addPlan`, {
         method: "POST",
         headers: {
           "Authorization": `${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ plan_name: planName, levels: currentLevel, required_hours: planRequierdHours }),
+        body: JSON.stringify({ plan_name: planName, levels: currentLevel, required_hours: requiredHoursNum }),
       });
 
       if (!response.ok) {
@@ -106,12 +122,13 @@ const AdminStudyPlansPage = () => {
       }
 
       setIsPopUpForAddingClicked(false); //change this to false to remove the pop up
-      setPlanName(''); //empty those values 
-      setCurrentLevel(1); //empty those values 
-      setPlanRequierdHours("") //empty those values 
+      setPlanName(''); //empty those values
+      setCurrentLevel(1); //empty those values
+      setPlanRequierdHours("") //empty those values
       setUpdatePlanValues(true) //fetch data again
     } catch (error) {
       console.error("Error adding plan:", error);
+      alert(`Failed to add plan: ${error.message}`);
     }
   };
 
@@ -129,176 +146,201 @@ const AdminStudyPlansPage = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
+      </div>
+    );
+  }
+
   return (
     <>
-      {!isLoading ? (
-        <div className="min-h-screen p-8 bg-gray-50 flex items-center justify-center">
-          <div className="mx-auto max-w-7xl w-full">
-            <div
-              className={`grid ${plans.length === 0
-                ? 'grid-cols-1'
-                : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
-                } gap-6 justify-items-center`}
+      <div className="min-h-screen bg-gray-100 p-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <h1 className="text-2xl font-semibold text-gray-900">Manage Study Plans</h1>
+            <button
+              onClick={handleAdding}
+              className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
-              {plans.map((plan, index) => (
+              Create New Plan
+            </button>
+          </div>
+
+          {plans.length > 0 ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {plans.map((plan) => (
                 <div
-                  key={index}
-                  className="bg-white rounded-xl p-6 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-xl animate-fadeIn w-full max-w-xs"
+                  key={plan.plan_id || plan.plan_name}
+                  className="flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
                 >
-                  <h2 className="text-2xl font-bold text-blue-600 mb-4 text-center">
-                    {plan.plan_id}
-                  </h2>
-                  <div className="flex justify-between items-center">
-                    <p className="text-gray-600 text-sm">{plan.last_update_date}</p>
-                  </div>
-                  <div className="flex justify-between mt-4 px-4">
-                    <Link
-                      to={`/editPlan`} // here I will pass other elements to the editPlan (passing the whole plan)
-                      state={{ plan: plan }} // passing the plan to the next page
-                      className="bg-blue-600 text-white px-8 py-2 rounded-full hover:bg-blue-800 transition-colors"
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      onClick={() => {
-                        setPlanThatWantToBeDeleted(plan.plan_id);
-                        onDelete();
-                      }}
-                      className="bg-red-600 text-white px-6 py-2 rounded-full hover:bg-red-800 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                   <div className="p-4">
+                        <h2 className="truncate text-lg font-semibold text-primary-dark" title={plan.plan_id || plan.plan_name}>
+                           {plan.plan_id || plan.plan_name}
+                        </h2>
+                        <p className="mt-1 text-xs text-gray-500">
+                           Levels: { Object.keys(plan.levels).length} | Required Hours: {plan.required_hours ?? 'N/A'}
+                        </p>
+                    </div>
+                    <div className="flex-grow p-4 pt-0">
+                         <p className="text-xs text-gray-500">Last Updated: {plan.last_update_date ? new Date(plan.last_update_date).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                   <div className="flex border-t border-gray-200 bg-gray-50">
+                   <button
+                       title="Delete Plan"
+                       className="flex-1 px-4 py-3 text-sm font-medium text-danger hover:bg-danger/10 focus:z-10 focus:outline-none focus:ring-2 focus:ring-danger"
+                       onClick={() => {
+                         setPlanThatWantToBeDeleted(plan.plan_id);
+                         onDelete();
+                       }}
+                     >
+                       Delete
+                     </button>
+                     <Link
+                       to={`/editPlan`} // here I will pass other elements to the editPlan (passing the whole plan)
+                       state={{ plan: plan }} // passing the plan to the next page
+                       title="Edit Plan"
+                       className="flex-1 border-r border-gray-200 px-4 py-3 text-center text-sm font-medium text-accent-dark hover:bg-accent/10 focus:z-10 focus:outline-none focus:ring-2 focus:ring-accent"
+                     >
+                       Edit
+                     </Link>
+
+                   </div>
                 </div>
               ))}
-              <div className="bg-white rounded-xl p-6 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-xl animate-fadeIn w-full max-w-xs flex flex-col justify-center items-center min-h-[200px]">
-                {plans.length === 0 && (
-                  <p className="text-center text-gray-600 mb-4">
-                    No plans available. Click below to add a new plan.
-                  </p>
-                )}
-                <div className="flex justify-center">
-                  <button
-                    className="bg-blue-600 text-white rounded-full w-20 h-20 flex items-center justify-center text-2xl font-bold hover:bg-blue-700 transition-colors"
-                    onClick={() => handleAdding()}
-                  >
-                    +
-                  </button>
-                </div>
+            </div>
+          ) : (
+            <div className="mt-10 rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No study plans found</h3>
+              <p className="mt-1 text-sm text-gray-500">Get started by creating a new study plan.</p>
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={handleAdding}
+                  className="inline-flex items-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                   Create New Plan
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
-      ) : (
-        <div className="flex justify-center items-center h-screen">
-          <div className="w-16 h-16 border-4 border-t-transparent border-blue-500 border-solid rounded-full animate-spin"></div>
-        </div>
-      )
-      }
+      </div>
 
       {isPopUpForAddingClicked && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onClick={() => setIsPopUpForAddingClicked(false)} // if user clicks outside, it will exit
         >
           <div
-            className="bg-white p-6 rounded-lg shadow-lg w-96"
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()} // prevents the button from triggering click event on parent elements
           >
-            <h2 className="text-xl font-bold mb-4">Add New Plan</h2>
-            <div className="mb-4">
-              <label htmlFor="title" className="block text-gray-700 mb-2">Title</label>
-              <input
-                type="text"
-                id="title"
-                value={planName}
-                onChange={(e) => setPlanName(e.target.value)}
-                className="w-full p-2 border rounded"
-                placeholder="Enter plan title"
-              />
-            </div>
+            <h2 className="mb-4 text-xl font-semibold text-gray-800">Add New Plan</h2>
+            <form onSubmit={handleAddPlan}>
+              <div className="mb-4">
+                <label htmlFor="title" className="mb-1 block text-sm font-medium text-gray-700">Title <span className="text-danger">*</span></label>
+                <input
+                  type="text"
+                  id="title"
+                  value={planName}
+                  onChange={(e) => setPlanName(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                  placeholder="Enter plan title"
+                  required
+                />
+              </div>
 
-            <div className="mb-4">
-              <label htmlFor="required_hours" className="block text-gray-700 mb-2">Required Hours</label>
-              <input
-                type="text"
-                id="required_hours"
-                value={planRequierdHours}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (/^[0-9]*$/.test(value)) { // prevents entering non-numbers
-                    setPlanRequierdHours(parseInt(value));
-                  }
-                }}
-                className="w-full p-2 border rounded"
-                placeholder="Enter plan required hours"
-              />
-            </div>
+              <div className="mb-4">
+                <label htmlFor="required_hours" className="mb-1 block text-sm font-medium text-gray-700">Required Hours <span className="text-danger">*</span></label>
+                <input
+                  type="input"
+                  id="required_hours"
+                  value={planRequierdHours}
+                   onChange={(e) => {
+                     const value = e.target.value;
+                      if (value === "" || /^[1-9][0-9]*$/.test(value)) {
+                          setPlanRequierdHours(value);
+                      }
+                   }}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                  placeholder="Enter plan required hours"
+                  min="1"
+                  required
+                />
+              </div>
 
-            {/* Plan Levels */}
-            <fieldset className="border p-4 rounded">
-              <legend className="text-lg font-semibold px-2">Select Plan Levels</legend>
-              <div className="flex items-center justify-center gap-3 mt-2">
-                <button
-                  type="button" // Prevent form submission
-                  onClick={handleDecrement}
-                  disabled={currentLevel <= MIN_LEVEL} // Disable if at min value
-                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  -
-                </button>
+              {/* Plan Levels */}
+              <fieldset className="mb-4 rounded-md border border-gray-300 p-4">
+                <legend className="px-1 text-sm font-medium text-gray-700">Select Plan Levels <span className="text-danger">*</span></legend>
+                <div className="mt-1 flex items-center justify-center gap-4">
+                  <button
+                    type="button" // prevent form submission
+                    onClick={handleDecrement}
+                    disabled={currentLevel <= MIN_LEVEL} // disable if at min value
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="text-xl leading-none">-</span>
+                  </button>
 
-                <span className="text-xl font-medium px-4 py-1 border rounded min-w-[50px] text-center">
-                  {currentLevel}
-                </span>
+                  <span className="min-w-[40px] text-center text-lg font-medium text-gray-900">
+                    {currentLevel}
+                  </span>
 
+                  <button
+                    type="button"
+                    onClick={handleIncrement}
+                    disabled={currentLevel >= MAX_LEVEL} // disable if at max value
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="text-xl leading-none">+</span>
+                  </button>
+                </div>
+              </fieldset>
+
+              <div className="mt-6 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={handleIncrement}
-                  disabled={currentLevel >= MAX_LEVEL}
-                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setIsPopUpForAddingClicked(false)}
+                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
                 >
-                  +
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  Add Plan
                 </button>
               </div>
-            </fieldset>
-
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsPopUpForAddingClicked(false)}
-                className="mt-2 px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddPlan}
-                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Add Plan
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}
 
       {deleteConfirmPopUp && (
         <div
-          className="fixed inset-0 flex items-center justify-center z-50 bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onClick={() => {
             setPlanThatWantToBeDeleted(null);
             setDeleteConfirmPopUp(false);
           }}
         >
           <div
-            className="relative bg-white p-8 rounded-lg shadow-xl w-full max-w-md"
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-gray-700 mb-8 text-2xl">
-              Are you sure you want to delete this plan?
+            <h2 className="mb-4 text-xl font-semibold text-gray-800">Confirm Deletion</h2>
+            <p className="text-gray-700 mb-8 text-lg"> 
+              Are you sure you want to delete this plan <strong className='text-danger'>{planThatWantToBeDeleted}</strong>?
             </p>
-            <div className="flex justify-end space-x-4 relative">
+            <div className="flex justify-end gap-3"> 
               <button
-                className="absolute left-0 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
                 onClick={() => {
                   setPlanThatWantToBeDeleted(null);
                   setDeleteConfirmPopUp(false);
@@ -307,11 +349,9 @@ const AdminStudyPlansPage = () => {
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                className="inline-flex justify-center rounded-md border border-transparent bg-danger px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-danger-dark focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2"
                 onClick={() => {
                   handleDeleteConfirmed();
-                  setDeleteConfirmPopUp(false);
-                  setPlanThatWantToBeDeleted(null);
                 }}
               >
                 Delete
