@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
 import LogoutButton from "./LogoutButton";
 import { useExtraInfo } from "../contexts/BackEndContext";
@@ -12,35 +12,42 @@ const Nav = () => {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const isAdmin = extraInfo?.role === "admin";
 
+  const activeClassName = "bg-accent-dark text-black";
+  const inactiveClassName = "text-black hover:bg-accent-light hover:text-black"; // Using black text for contrast on default accent bg
+
   return (
     <>
-      <nav className="bg-gray-800 p-4 shadow-md">
-        <div className="flex justify-between items-center">
-          {/* Left Side - Links */}
-          <ul className="flex space-x-6 text-white">
+      <nav className="bg-accent shadow-md border-b border-accent-dark">
+        <div className="container mx-auto flex items-center justify-between px-4 py-3">
+          {/* Left Side */}
+          <ul className="flex items-center space-x-4 md:space-x-6">
             {isAuth ? (
               <>
                 {isAdmin ? (
                   <>
-                    <li className="text-gray-300">
-                      <Link
+                    <li>
+                      <NavLink
                         to="/AdminHomePage"
-                        className="hover:text-gray-300 transition duration-300"
+                        className={({ isActive }) =>
+                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
+                        }
                       >
-                        HomePage
-                      </Link>
+                        Home
+                      </NavLink>
                     </li>
-                    <li className="text-gray-300">
-                      <Link
+                    <li>
+                       <NavLink
                         to="/AdminStudyPlansPage"
-                        className="hover:text-gray-300 transition duration-300"
+                         className={({ isActive }) =>
+                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
+                        }
                       >
                         Study Plans
-                      </Link>
+                      </NavLink>
                     </li>
-                    <li className="text-gray-300">
+                    <li>
                       <button
-                        className="hover:text-gray-300 transition duration-300"
+                         className={`rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${inactiveClassName}`} // Styled like a NavLink
                         onClick={() => setIsPopupOpen(true)}
                       >
                         Courses
@@ -50,39 +57,45 @@ const Nav = () => {
                 ) : (
                   <>
                     <li>
-                      <Link
+                      <NavLink
                         to="/StudentHomePage"
-                        className="hover:text-gray-300 transition duration-300"
+                         className={({ isActive }) =>
+                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
+                        }
                       >
-                        HomePage
-                      </Link>
+                        Home
+                      </NavLink>
                     </li>
                     <li>
-                      <Link
+                      <NavLink
                         to="/AvailableForms"
-                        className="hover:text-gray-300 transition duration-300"
+                         className={({ isActive }) =>
+                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
+                        }
                       >
                         Available Forms
-                      </Link>
+                      </NavLink>
                     </li>
                   </>
                 )}
               </>
             ) : (
               <li>
-                <Link
+                <NavLink
                   to="/"
-                  className="hover:text-gray-300 transition duration-300"
+                   className={({ isActive }) =>
+                      `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
+                   }
                 >
-                  LoginPage
-                </Link>
+                  Login
+                </NavLink>
               </li>
             )}
           </ul>
 
           {/* Right Side - Logout Button */}
           {isAuth && (
-            <div className="text-white">
+            <div>
               <LogoutButton />
             </div>
           )}
@@ -90,11 +103,10 @@ const Nav = () => {
       </nav>
       {(isPopupOpen && isAdmin) && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onClick={() => setIsPopupOpen(false)}
         >
           <div
-            className="bg-white p-4 rounded"
             onClick={(e) => e.stopPropagation()}
           >
             <ShowCoursesPopUp/>

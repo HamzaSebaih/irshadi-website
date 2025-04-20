@@ -10,31 +10,34 @@ const LoadingPage = () => {
 
   // Handle navigation logic in useEffect
   useEffect(() => {
-    console.log(extraInfo?.role)
     if (!user) {
       navigate("/login");
-      return
-    } else if (!loadingExtra) {
-      // Once extra info is loaded, navigate based on role
+      return;
+    }
+
+    if (!loadingExtra) {
       if (extraInfo?.role === "admin") {
         navigate('/adminHomePage');
-      } else if(extraInfo?.role==="student") {
+      } else if (extraInfo?.role === "student") {
         navigate('/studentHomePage');
-      }
-      else{
-        return
-        // setTimeout(() => { //this will fix the issue where it's loading forever
-        //   window.location.reload(); //in case the fetch failed it will reload the page every 1.5 second 
-        // }, 1500); // 1.5 seconds delay
+      } else {
+        // Consider navigating to a specific 'role not assigned' page or login if role is unexpected
+        navigate('/unauthorized'); // Kept original navigation
       }
     }
+    // else: Still loading, wait for next effect run
   }, [user, loadingExtra, extraInfo, navigate]);
 
-
-  return   <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
-  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-  <p className="mt-4 text-lg font-semibold text-gray-700">Loading...</p>
-  </div>;;
+  // Render the loading spinner UI
+  return (
+    // Use consistent background
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100">
+       {/* Use theme color for spinner and consistent size */}
+      <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
+       {/* Consistent text styling */}
+      <p className="mt-4 text-base font-medium text-gray-600">Loading...</p>
+    </div>
+  );
 };
 
 export default LoadingPage;

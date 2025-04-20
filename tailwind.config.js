@@ -7,11 +7,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Your existing colors
         primary: {
-          light: '#66D771',  // Lighter shade Green
-          DEFAULT: '#43CA52', // Main primary color Green
-          dark: '#329A3E'   // Darker shade Green
+          light: '#3B82F6',  // blue-500
+          DEFAULT: '#1D4ED8', // blue-700
+          dark: '#1E40AF'   // blue-800
         },
         secondary: {
           light: '#B0E6EB', // Lighter shade Cyan/Light Blue
@@ -24,16 +23,15 @@ export default {
           dark: '#4D8FBF'  // Darker shade Blue
         },
 
-        // Added colors for semantic states
         danger: { // Red palette for errors, destructive actions
-          light: '#FEE2E2', // Suggests Tailwind's red-100
-          DEFAULT: '#EF4444', // Suggests Tailwind's red-500
-          dark: '#B91C1C'  // Suggests Tailwind's red-700
+          light: '#FEE2E2', // red-100
+          DEFAULT: '#EF4444', // red-500
+          dark: '#B91C1C'  // red-700
         },
-        warning: { // Amber/Orange palette for warnings, attention needed
-          light: '#FEF3C7', // Suggests Tailwind's amber-100
-          DEFAULT: '#F59E0B', // Suggests Tailwind's amber-500
-          dark: '#B45309'  // Suggests Tailwind's amber-700
+        warning: { 
+          light: '#FEF3C7', // amber-100
+          DEFAULT: '#F59E0B', // amber-500
+          dark: '#B45309'  // amber-700
         }
       }
     }

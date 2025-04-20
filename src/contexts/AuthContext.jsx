@@ -1,49 +1,54 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react'; 
 import { auth } from '../firebase';
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
 
-const AuthContext = createContext(); //Any component inside the AuthProvider will have access to this context.
+const AuthContext = createContext();
 
-export const useAuth = () => useContext(AuthContext); //this to make it easier to use the context 
+export const useAuth = () => useContext(AuthContext);
 
-export function AuthProvider({ children }) { 
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null); 
+  const [loading, setLoading] = useState(true); 
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (user) => { 
+      setUser(user); 
+      setLoading(false); 
     });
     return unsubscribe;
   }, []);
 
-  const signup = (email, password) => {
-    return createUserWithEmailAndPassword(auth, email, password);
+
+  const signup = (email, password) => { 
+    return createUserWithEmailAndPassword(auth, email, password); 
   };
 
-  const login = (email, password) => {
-    return signInWithEmailAndPassword(auth, email, password);
+  const login = (email, password) => { 
+    return signInWithEmailAndPassword(auth, email, password); 
   };
 
-  const logout = () => {
-    return signOut(auth);
+  const logout = () => { 
+    return signOut(auth); 
   };
 
-  const value = {
+
+  const value = useMemo(() => ({
     user,
     signup,
     login,
     logout
-  };
+  }), [user]);
+
+
 
   return (
     <AuthContext.Provider value={value}>
+      {/* Only render children when Firebase auth state is determined */}
       {!loading && children}
     </AuthContext.Provider>
   );
