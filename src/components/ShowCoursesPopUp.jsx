@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { data } from "react-router-dom";
 
 const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse, setIsLoadingForPage }) => {
   const backendIp = "http://127.0.0.1:5000"; // Backend IP domain
@@ -17,6 +16,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
   const [prerequisitesCourseThatWantToBeDeleted,setPrerequisitesCourseThatWantToBeDeleted]=useState(null)
   const [parentPrerequisitesCourseThatWantToBeDeleted,setParentPrerequisitesCourseThatWantToBeDeleted] = useState(null)
   const { user } = useAuth(); // Get current user from AuthContext
+
   // Fetch courses when updateTheTable changes
   useEffect(() => {
     if (!user) return;
@@ -42,6 +42,8 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
     } catch (error) {
       console.error("Error fetching courses:", error);
       setAllCourses([]);
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -81,7 +83,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
       alert("Failed to create course. Please try again.");
     }
   };
-  
+
   useEffect(() => {
     if(courseThatWantToBeDeleted){
     handleDeleteCourse().finally(() => {
@@ -109,7 +111,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
       else{
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
-    } 
+    }
       setUpdateTheTable(true);
       alert(courseThatWantToBeDeletedTemp+" course has been delete successfully");
     } catch (error) {
@@ -128,6 +130,14 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
   },[prerequisitesCourseThatWantToBeDeleted])
 
   const handleDeletingPrerequisite = async () => {
+    // Store IDs before the async call might clear them in the finally block
+    const prerequisiteIdToDelete = prerequisitesCourseThatWantToBeDeleted;
+    const parentCourseIdOfDeletedPrereq = parentPrerequisitesCourseThatWantToBeDeleted;
+
+    if (!prerequisiteIdToDelete || !parentCourseIdOfDeletedPrereq) {
+      console.error("Missing prerequisite or parent course ID for deletion.");
+      return; // Exit if IDs are not set
+    }
     try {
       const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/deleteCoursePre`, {
@@ -136,22 +146,42 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
           Authorization: `${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({prerequisite_id: prerequisitesCourseThatWantToBeDeleted,course_id: parentPrerequisitesCourseThatWantToBeDeleted}),
+        body: JSON.stringify({
+          prerequisite_id: prerequisiteIdToDelete,
+          course_id: parentCourseIdOfDeletedPrereq
+        }),
       });
+
       if (!response.ok){
-          throw new Error(`Failed to Delete course.`);      
-    } 
-      setUpdateTheTable(true);
-      alert(prerequisitesCourseThatWantToBeDeleted+" course has been delete successfully");
+          throw new Error(`Failed to Delete course prerequisite. Status: ${response.status}`);
+      }
+
+      // update UI Locally
+      setAllCourses(prevCourses =>
+        prevCourses.map(course => {
+          const currentCourseId = `${course.department}-${course.course_number}`;
+          // find the parent course whose prerequisite was deleted
+          if (currentCourseId === parentCourseIdOfDeletedPrereq) {
+            // return a new course object with the prerequisite filtered out
+            return {
+              ...course,
+              prerequisites: course.prerequisites.filter(prereq => prereq !== prerequisiteIdToDelete)
+            };
+          }
+          // otherwise, return the course unchanged
+          return course;
+        })
+      );
     } catch (error) {
-      console.error("Error Deleteing course:", error);
-      alert(error);
+      console.error("Error Deleting course prerequisite:", error);
+      alert(`Error: ${error.message || 'Could not delete prerequisite.'}`);
     }
-  };
 
-  
+};
 
-  // Placeholder handler for adding a course to a plan
+
+
+  // handler for adding a course to a plan
   const handleAddCourseToPlan = async (course, planID, planLevel) => {
     // setIsLoadingForPage(true)
     let fixedPlanLevel = planLevel
@@ -170,7 +200,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
         },
         body: JSON.stringify({ plan_name: planID, level_identifier: fixedPlanLevel, course_id: course_ide }),
       });
-      const data = await response.json(); // Parse the response body as JSON
+      const data = await response.json();
       console.log(data)
       if(data.frontEndMessage == 101 ){
         setIsAddedNewCourse({level: planLevel,course:course_ide,alreadyAdded:true})
@@ -182,89 +212,121 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
         setIsAddedNewCourse({level: planLevel,course:course_ide})
       }
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+          throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
     } catch (error) {
-      console.error("Error adding plan:", error);
+      console.error("Error adding course to plan:", error);
+      alert(`Failed to add course to plan: ${error.message}`);
     }
     finally {
       // setIsLoadingForPage(false)
     }
   };
 
-  // Placeholder handler for adding a prerequisite
-  const handleAddingPrerequisite = async (course, localParentCourse) => {
-    setUpdateTheTable(true); // Trigger table update
-    const parent_course_id = localParentCourse.department + "-" + localParentCourse.course_number
-    const prerequisite_course_id = course.department + "-" + course.course_number
-    try {
-      const token = await user.getIdToken();
-      const response = await fetch(`${backendIp}/addCoursePre`, {
-        method: "POST",
-        headers: {
-          "Authorization": `${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ course_id: parent_course_id, prerequisite: prerequisite_course_id }),
-      });
-      if (!response.ok){
-        if(response.status===409){
-          throw new Error(`Failed to add prerequisite course. conflict between two courses.`);
-        }
-      else{
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
+  // handler for adding a prerequisite
+  const handleAddingPrerequisite = async (newPrerequisiteCourse, parentCourseData) => {
+    const parent_course_id = `${parentCourseData.department}-${parentCourseData.course_number}`;
+    const prerequisite_course_id = `${newPrerequisiteCourse.department}-${newPrerequisiteCourse.course_number}`;
+
+    // check if the prerequisite already exists locally 
+    const parentCourseInState = allCourses.find(c =>
+        `${c.department}-${c.course_number}` === parent_course_id
+    );
+
+    if (parentCourseInState && Array.isArray(parentCourseInState.prerequisites) && parentCourseInState.prerequisites.includes(prerequisite_course_id)) {
+        alert(`${prerequisite_course_id} is already a prerequisite for ${parent_course_id}.`);
+        setLocalParentCourse(null);
+        return; 
     }
+    try {
+        const token = await user.getIdToken();
+        const response = await fetch(`${backendIp}/addCoursePre`, {
+            method: "POST",
+            headers: {
+                Authorization: `${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ course_id: parent_course_id, prerequisite: prerequisite_course_id }),
+        });
+
+        if (!response.ok){
+            if(response.status === 409){
+                throw new Error(`Failed to add prerequisite. Conflict detected.`);
+            } else {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+        }
+
+        //Update UI Locally
+        setAllCourses(prevCourses =>
+            prevCourses.map(course => {
+                const currentCourseId = `${course.department}-${course.course_number}`;
+                if (currentCourseId === parent_course_id) {
+                    // ensure prerequisites array exists and is an array
+                    const existingPrerequisites = Array.isArray(course.prerequisites) ? course.prerequisites : [];
+                    // return new course object with the new prerequisite added
+                    return {
+                        ...course,
+                        // add the new prerequisite to the existing list
+                        prerequisites: [...existingPrerequisites, prerequisite_course_id]
+                    };
+                }
+                return course; 
+            })
+        );
 
     } catch (error) {
-      console.error("Error adding plan:", error);
-      alert(error)
+        console.error("Error adding prerequisite:", error);
+        alert(`Error: ${error.message || 'Could not add prerequisite.'}`);
+
     }
     finally {
-      setLocalParentCourse(null)
+        setLocalParentCourse(null);
     }
-  };
+};
 
   // Dynamic header based on context
   let header;
   if (localParentCourse) {
     header = (
-      <h2 className="text-xl font-semibold mb-4">
-        Select a course to add as prerequisite to {localParentCourse.department + localParentCourse.course_number}
+      <h2 className="mb-4 text-xl font-semibold text-gray-800">
+        Select prerequisite for <span className="font-bold text-primary-dark">{localParentCourse.department}{localParentCourse.course_number}</span>
       </h2>
     );
   } else if (planID) {
     header = (
-      <h2 className="text-xl font-semibold mb-4">
-        Select a course to add to plan {planID}
+      <h2 className="mb-4 text-xl font-semibold text-gray-800">
+        Add course to <span className="font-bold text-primary-dark">{planID}</span> - <span className="font-bold text-secondary-dark">{planLevel}</span>
       </h2>
     );
   } else {
-    header = <h2 className="text-xl font-semibold mb-4">Available Courses</h2>;
+    header = <h2 className="mb-4 text-xl font-semibold text-gray-800">Available Courses</h2>;
   }
 
   return (
-    <div className="p-6 bg-white rounded shadow-md w-[50vw] h-[50vh] flex flex-col">
+    <div className="flex h-[70vh] w-[60vw] flex-col rounded-lg bg-white p-6 shadow-xl">
       {isCreatingCourse ? (
         <>
-          <h2 className="text-xl font-semibold mb-4">Create New Course</h2>
-          <form onSubmit={handleSaveNewCourse}>
+          <h2 className="mb-4 text-xl font-semibold text-gray-800">Create New Course</h2>
+          <form onSubmit={handleSaveNewCourse} className="flex-grow overflow-y-auto pr-2">
             <div className="mb-4">
-              <label className="block text-gray-700">Department</label>
+              <label htmlFor="department" className="mb-1 block text-sm font-medium text-gray-700">Department</label>
               <input
                 type="text"
+                id="department"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="Ex. CPIT"
                 required
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700">Course Number</label>
+              <label htmlFor="courseNumber" className="mb-1 block text-sm font-medium text-gray-700">Course Number</label>
               <input
                 type="text"
+                id="courseNumber"
                 value={courseNumber}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -272,16 +334,17 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
                     setCourseNumber(value);
                   }
                 }}
-                className="w-full p-2 border border-gray-300 rounded"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 inputMode="numeric"
                 placeholder="Ex. 250"
                 required
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700">Hours</label>
+              <label htmlFor="hours" className="mb-1 block text-sm font-medium text-gray-700">Hours</label>
               <input
                 type="number"
+                id="hours"
                 value={hours}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -289,7 +352,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
                     setHours(value);
                   }
                 }}
-                className="w-full p-2 border border-gray-300 rounded"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="Ex. 3"
                 min="1"
                 max="15"
@@ -297,68 +360,81 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700">Course Name</label>
+              <label htmlFor="courseName" className="mb-1 block text-sm font-medium text-gray-700">Course Name</label>
               <input
                 type="text"
+                id="courseName"
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="Ex. Software Engineering 1"
                 required
               />
             </div>
-            <div className="flex justify-end space-x-2">
+            <div className="mt-6 flex justify-end gap-3 border-t border-gray-200 pt-4">
               <button
                 type="button"
                 onClick={() => setIsCreatingCourse(false)}
-                className="bg-gray-500 hover:bg-gray-600 text-white text-sm py-2 px-4 rounded"
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-2 px-4 rounded"
+                className="inline-flex justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               >
-                Save
+                Save Course
               </button>
             </div>
           </form>
         </>
       ) : isLoading ? (
-        <p className="text-gray-600">Loading courses...</p> // NEW: Loading indicator
+        <div className="flex flex-grow items-center justify-center">
+             <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
+        </div>
       ) : (
         <>
           {header}
-          <div className="flex-grow overflow-y-auto"> {/* NEW: Scrollable container */}
-            <ul className="space-y-2">
+          <div className="flex-grow overflow-y-auto border-t border-b border-gray-200 py-2 pr-2">
+            <ul className="space-y-3">
               {allCourses.map((course) => (
                 <li
                   key={course.department + course.course_number}
-                  className="bg-white p-4 border border-gray-200 rounded shadow hover:shadow-md transition-shadow"
+                  className="rounded-md border border-gray-200 bg-white p-4"
                 >
-                  <h3 className="text-xl font-semibold text-gray-800">
-                    {course.department}{course.course_number}
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {course.department}{course.course_number} - {course.course_name} ({course.hours} hrs)
                   </h3>
                   {course.prerequisites && course.prerequisites.length > 0 ? (
-                    <ul className="mt-2 ml-5 list-disc text-sm text-gray-700">
-                      {course.prerequisites.map((prereq, index) => (
-                        <>
-                        <li key={index}>{prereq}  <button onClick={()=>{
-                          setPrerequisitesCourseThatWantToBeDeleted(prereq)
-                          setParentPrerequisitesCourseThatWantToBeDeleted(course.department+"-"+course.course_number)
-                        }} className="mt-2 bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-1 rounded">Delete</button></li>
-                       
-                        </>
-                      ))}
-                    </ul>
+                    <div className="mt-2">
+                        <span className=" font-medium text-gray-500">Prerequisites:</span>
+                        <ul className="ml-2 mt-1 space-y-1">
+                        {course.prerequisites.map((prereq, index) => (
+                            <li key={index} className="flex items-center justify-between rounded bg-gray-100 px-2 py-1">
+                                <span className="text-sm text-gray-700">{prereq}</span>
+                                <button onClick={()=>{
+                                setPrerequisitesCourseThatWantToBeDeleted(prereq)
+                                setParentPrerequisitesCourseThatWantToBeDeleted(course.department+"-"+course.course_number)
+                                }}
+                                title={`Delete prerequisite ${prereq}`}
+                                className="ml-2 flex h-8 w-8 items-center justify-center rounded-full p-1.5 text-danger hover:bg-danger/10 focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-1"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}> {/* Adjusted strokeWidth */}
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </li>
+                        ))}
+                        </ul>
+                    </div>
                   ) : (
-                    <p className="mt-2 text-sm text-gray-600">No prerequisites</p>
+                    <p className="mt-2 text-gray-500">No prerequisites</p>
                   )}
-                  <div className="mt-4 flex justify-end space-x-2">
-                  {(planID && !localParentCourse) && (
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                    {(planID && !localParentCourse) && (
                       <button
                         onClick={() => handleAddCourseToPlan(course, planID, planLevel)}
-                        className="bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded"
+                        className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                       >
                         Add to Plan
                       </button>
@@ -367,13 +443,13 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
                     {!localParentCourse && (
                       <>
                         <button
-                          className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
+                          className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
                           onClick={() => setLocalParentCourse(course)}
                         >
-                          Add prerequisite
+                          Add Prerequisite
                         </button>
                         <button
-                          className="bg-red-500 hover:bg-red-600 text-white text-sm py-1 px-3 rounded"
+                          className="inline-flex items-center justify-center rounded-md border border-transparent bg-danger px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-danger-dark focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2"
                           onClick={() => setCourseThatWantToBeDeleted(course)}
                         >
                           Delete Course
@@ -381,11 +457,10 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
                       </>
                     )}
 
-
-                    {localParentCourse && !(localParentCourse === course) && (
-                      <button
+                    {localParentCourse && !(localParentCourse.department === course.department && localParentCourse.course_number === course.course_number) && (
+                       <button
                         onClick={() => handleAddingPrerequisite(course, localParentCourse)}
-                        className="bg-green-500 hover:bg-green-600 text-white text-sm py-1 px-3 rounded"
+                          className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                       >
                         Add as Prerequisite
                       </button>
@@ -396,20 +471,22 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
               ))}
             </ul>
           </div>
-          <button
-            onClick={handleCreateNewCourse}
-            className="mt-4 bg-blue-500 hover:bg-blue-600 text-white text-sm py-2 px-4 rounded"
-          >
-            Create New Course
-          </button>
-          {localParentCourse && <button //if there is set prerequist then show this button else hide it
-            onClick={() => {
-              setLocalParentCourse(null)
-            }}
-            className="mt-4 bg-gray-400 hover:bg-gray-500 text-black text-sm py-2 px-4 rounded"
-          >
-            Cancel
-          </button>}
+          <div className="mt-4 flex flex-col gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:justify-between">
+                <button
+                    onClick={handleCreateNewCourse}
+                    className="inline-flex w-full justify-center rounded-md border border-transparent bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 sm:w-auto"
+                >
+                    Create New Course
+                </button>
+                {localParentCourse && <button //if there is set prerequist then show this button else hide it
+                    onClick={() => {
+                    setLocalParentCourse(null)
+                    }}
+                    className="inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2 sm:w-auto sm:order-first"
+                >
+                    Cancel Prerequisite Selection
+                </button>}
+            </div>
         </>
       )}
     </div>
