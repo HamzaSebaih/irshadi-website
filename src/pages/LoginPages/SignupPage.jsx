@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import { getAuth, signInWithPopup, GoogleAuthProvider, linkWithCredential, EmailAuthProvider, signInWithCredential } from "firebase/auth";
+import { getAuth, signInWithPopup, GoogleAuthProvider, sendEmailVerification } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
@@ -15,10 +15,8 @@ const SignupPage = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [validationErrors, setValidationErrors] = useState({});
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [modalPassword, setModalPassword] = useState("");
-  const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
   const { signup } = useAuth();
   const navigate = useNavigate();
   const auth = getAuth();
@@ -36,6 +34,7 @@ const SignupPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
     const errors = {};
 
     // Required Fields Check
@@ -57,9 +56,14 @@ const SignupPage = () => {
     if (Object.keys(errors).length > 0) return;
 
     try {
-      await signup(email, password);
-      console.log("Email/Password Signup Successful");
-      navigate("/ProfileCompletionPage");
+      const userCredential = await signup(email, password);
+      await sendEmailVerification(userCredential.user);
+      console.log("Email/Password Signup Successful, Verification Email Sent");
+      setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
+      
+      setTimeout(() => {
+        navigate("/LoginP");
+      }, 3000);
     } catch (error) {
       console.error("Email/Password Signup Error:", error.code, error.message);
       const msg =
@@ -74,43 +78,14 @@ const SignupPage = () => {
     try {
       await signInWithPopup(auth, googleProvider);
       console.log("Google Signup Successful");
-      navigate("/ProfileCompletionPage");
+      setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
+      await getAuth().signOut();
+      setTimeout(() => {
+        navigate("/");
+      }, 3000);
     } catch (error) {
       console.error("Google Signup Error:", error.code, error.message);
-      if (error.code === "auth/account-exists-with-different-credential") {
-        const credential = GoogleAuthProvider.credentialFromError(error);
-        console.log("Storing Google Credential:", credential);
-        setPendingGoogleCredential(credential);
-        setError("This email is already registered with a different method. Please enter your password to link accounts.");
-        setShowPasswordModal(true);
-      } else {
-        setError(`Failed to sign up with Google: ${error.message}`);
-      }
-    }
-  };
-
-  const handleLinkAccount = async (e) => {
-    e.preventDefault();
-    if (!pendingGoogleCredential) {
-      console.error("No pending Google credential found");
-      setError("No Google credential available. Please try again.");
-      setShowPasswordModal(false);
-      return;
-    }
-    try {
-      console.log("Attempting to link accounts with email:", email);
-      const emailCredential = EmailAuthProvider.credential(email, modalPassword);
-      const userCredential = await signInWithCredential(auth, emailCredential);
-      console.log("Email/Password sign-in successful, linking Google account...");
-      await linkWithCredential(userCredential.user, pendingGoogleCredential);
-      console.log("Accounts linked successfully");
-      setShowPasswordModal(false);
-      setModalPassword("");
-      setPendingGoogleCredential(null);
-      navigate("/loading");
-    } catch (error) {
-      console.error("Link Account Error:", error.code, error.message);
-      setError(`Failed to link accounts: ${error.message}`);
+      setError(`Failed to sign up with Google: ${error.message}`);
     }
   };
 
@@ -151,6 +126,16 @@ const SignupPage = () => {
               className="bg-red-100 text-red-700 border border-red-300 p-3 rounded mb-4"
             >
               {error}
+            </motion.div>
+          )}
+
+          {successMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-green-100 text-green-700 border border-green-300 p-3 rounded mb-4"
+            >
+              {successMessage}
             </motion.div>
           )}
 
@@ -272,54 +257,6 @@ const SignupPage = () => {
               Continue with Google
             </motion.button>
           </form>
-
-          {/* Password Modal for Linking Accounts */}
-          {showPasswordModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-white rounded-lg p-6 w-full max-w-sm"
-              >
-                <h3 className="text-lg font-semibold mb-4">Link Your Account</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Please enter the password for {email} to link your Google account.
-                </p>
-                <form onSubmit={handleLinkAccount}>
-                  <input
-                    type="password"
-                    value={modalPassword}
-                    onChange={(e) => setModalPassword(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none mb-4"
-                    placeholder="Enter your password"
-                  />
-                  <div className="flex gap-4">
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      type="submit"
-                      className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
-                    >
-                      Link Account
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      type="button"
-                      onClick={() => {
-                        setShowPasswordModal(false);
-                        setModalPassword("");
-                        setPendingGoogleCredential(null);
-                      }}
-                      className="flex-1 bg-gray-300 text-gray-800 py-2 rounded-md hover:bg-gray-400 transition"
-                    >
-                      Cancel
-                    </motion.button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
         </div>
       </motion.div>
     </div>
