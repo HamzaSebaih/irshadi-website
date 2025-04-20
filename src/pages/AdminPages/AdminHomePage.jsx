@@ -22,6 +22,11 @@ const AdminHomePage = () => {
   const [isPopUpForReportsClicked, setIsPopUpForReportsClicked] = useState(false)
   const [formThatWantToBeEdited, setFormThatWantToBeEdited] = useState(null)
   const [formThatWantToPrintReport, setFormThatWantToPrintReport] = useState(null)
+  const [isPopUpForSpecificCourseClicked, setIsPopUpForSpecificCourseClicked] = useState(false)
+  const [isPopUpForAiClicked, setIsPopUpForAiClicked] = useState(false)
+  const [specificCourse, setSpecificCourse] = useState(null)
+  const [sectionCapacity,setSectionCapacity] = useState("")
+  const [timePreference,setTimePreference] = useState("")
   const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
   useEffect(() => {
     if (!user) return;
@@ -103,7 +108,7 @@ const AdminHomePage = () => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0'); // month is 0-indexed
     const day = String(date.getDate()).padStart(2, '0');
-  
+
     return `${year}-${month}-${day}`;
   }
   const handleSubmitForm = () => {
@@ -160,45 +165,227 @@ const AdminHomePage = () => {
       console.error("Error adding plan:", error);
     }
   };
-  const handleEditForm = async () =>{
+  const handleEditForm = async () => {
     console.log(formThatWantToBeEdited)
-      const start = new Date(formatDate(formThatWantToBeEdited.start_date));
-      const end = new Date(formatDate(formThatWantToBeEdited.end_date));
+    const start = new Date(formatDate(formThatWantToBeEdited.start_date));
+    const end = new Date(formatDate(formThatWantToBeEdited.end_date));
 
-      if (end < start) {
-        alert('Please make sure the Start is before The End Date');
+    if (end < start) {
+      alert('Please make sure the Start is before The End Date');
+    }
+    else {
+      try {
+        const token = await user.getIdToken();
+        const body = {
+          form_id: formThatWantToBeEdited.form_id,
+          title: formThatWantToBeEdited.title,
+          description: formThatWantToBeEdited.description,
+          start_date: formatDate(formThatWantToBeEdited.start_date),
+          end_date: formatDate(formThatWantToBeEdited.end_date),
+        };
+        const response = await fetch(`${backendIp}/editForm`, {
+          method: "PATCH",
+          headers: {
+            "Authorization": `${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...body }),
+        });
+        setUpdateTheTable(true)
+        setIsPopUpForEditingClicked(false)
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+      } catch (error) {
+        console.error("Error adding plan:", error);
       }
-      else{
-        try {
-          const token = await user.getIdToken();
-          const body = {
-            form_id: formThatWantToBeEdited.form_id,
-            title: formThatWantToBeEdited.title,
-            description: formThatWantToBeEdited.description,
-            start_date: formatDate(formThatWantToBeEdited.start_date),
-            end_date: formatDate(formThatWantToBeEdited.end_date),
-          };
-          const response = await fetch(`${backendIp}/editForm`, {
-            method: "PATCH",
-            headers: {
-              "Authorization": `${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ ...body }),
-          });
-          setUpdateTheTable(true)
-          setIsPopUpForEditingClicked(false)
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-    
-        } catch (error) {
-          console.error("Error adding plan:", error);
+    }
+  };
+
+  const getAllCoursesInPlan = (formData) => { //this function will return all courses so I can show it when I want to print report for one course only
+    const plan_id = formData.plan_id;
+    const plan = plans.find(p => p.plan_id === plan_id);
+    if (plan) {
+      return Object.values(plan.levels).flat();
+    } else {
+      return [];
+    }
+  }
+
+  const getAllCoursePriorityLists = async () => {
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${backendIp}/getAllCoursePriorityLists`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+          body: JSON.stringify({ form_id: formThatWantToPrintReport.form_id }),
+        },
+      });
+      if (!response.ok) {
+        if (response.status === 500) {
+          throw new Error("No Responses avaliable !")
+        }
+        else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
       }
-    
-    
-  };
+      const data = await response.json();
+      console.log(data)
+      setIsPopUpForReportsClicked(false)
+    } catch (error) {
+      console.error("Error in Reports", error);
+      alert(error)
+    }
+
+  }
+  const getCoursePriorityList = async () => {
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${backendIp}/getCoursePriorityList`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+          body: JSON.stringify({ form_id: formThatWantToPrintReport.form_id, course_id: specificCourse }),
+        },
+      });
+      if (!response.ok) {
+        if (response.status === 500) {
+          throw new Error("No Responses avaliable !")
+        }
+        else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+      }
+      const data = await response.json();
+      console.log(data)
+      setIsPopUpForSpecificCourseClicked(false)
+      setIsPopUpForReportsClicked(false)
+    } catch (error) {
+      console.error("Error in Reports", error);
+      alert(error)
+    }
+
+  }
+  const getFormCourseStats = async () => {
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${backendIp}/getFormCourseStats`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+          body: JSON.stringify({ form_id: formThatWantToPrintReport.form_id }),
+        },
+      });
+      if (!response.ok) {
+        if (response.status === 500) {
+          throw new Error("No Responses avaliable !")
+        }
+        else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+      }
+      const data = await response.json();
+      console.log(data)
+      setIsPopUpForReportsClicked(false)
+    } catch (error) {
+      console.error("Error in Reports", error);
+      alert(error)
+    }
+
+  }
+
+  const getGraduatingStudentCourses = async () => {
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${backendIp}/getGraduatingStudentCourses`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+          body: JSON.stringify({ form_id: formThatWantToPrintReport.form_id }),
+        },
+      });
+      if (!response.ok) {
+        if (response.status === 500) {
+          throw new Error("No Responses avaliable !")
+        }
+        else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+      }
+      const data = await response.json();
+      console.log(data)
+      setIsPopUpForReportsClicked(false)
+    } catch (error) {
+      console.error("Error in Reports", error);
+      alert(error)
+    }
+  }
+
+  const generateSectionSchedule = async () => {
+    try {
+      let body ={}
+      if(sectionCapacity!="" && timePreference != ""){
+         body = {
+          form_id: formThatWantToPrintReport.form_id,
+          sectionCapacity:sectionCapacity,
+          timePreference:timePreference
+        }
+      } else if(sectionCapacity != ""){
+         body = {
+          form_id: formThatWantToPrintReport.form_id,
+          sectionCapacity:sectionCapacity,
+        }
+      } else if(timePreference != ""){
+         body = {
+          form_id: formThatWantToPrintReport.form_id,
+          timePreference:timePreference
+        }
+      } else{
+         body = {
+          form_id: formThatWantToPrintReport.form_id,
+        }
+      }
+      console.log(body)
+      setIsPopUpForAiClicked(false)
+      setIsPopUpForReportsClicked(false)
+      const token = await user.getIdToken();
+      const response = await fetch(`${backendIp}/generateSectionSchedule`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+          body: JSON.stringify({ ...body }),
+        },
+      });
+      if (!response.ok) {
+        if (response.status === 500) {
+          throw new Error("No Responses avaliable !")
+        }
+        else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+      }
+      const data = await response.json();
+      console.log(data)
+      setIsPopUpForReportsClicked(false)
+    } catch (error) {
+      console.error("Error in Reports", error);
+      alert(error)
+    }
+    finally{
+      setTimePreference("")
+      setSectionCapacity("")
+    }
+  }
+
+
   return (
     <>
       {!isLoading ? (
@@ -212,9 +399,10 @@ const AdminHomePage = () => {
             >
 
               {formsTable.map((form, index) => (
+
                 <div key={index} className="bg-white border border-gray-200 p-6 rounded-lg shadow-md hover:shadow-lg transition">
                   {/* Title */}
-                  <h2 className="text-xl font-semibold text-gray-800">{form.title}</h2>
+                  <h2 className="text-xl font-semibold">{form.title}</h2>
 
                   {/* Description */}
                   <p className="mt-2 text-gray-600">{form.description}</p>
@@ -230,11 +418,24 @@ const AdminHomePage = () => {
                     <span><strong>Responses:</strong> {form.responses}</span>
                     <span><strong>Expected Students:</strong> {form.expected_students}</span>
                   </div>
-
+                  {/* Progress Bar */}
+                  {form.expected_students > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-600">
+                        Completion: {Math.round((form.responses / form.expected_students) * 100)}%
+                      </p>
+                      <div className="w-full h-4 bg-gray-200 rounded-full mt-1">
+                        <div
+                          className="h-4 bg-blue-500 rounded-full"
+                          style={{ width: `${Math.min((form.responses / form.expected_students) * 100, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-4 flex space-x-4">
                     <button
-                      className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition"
+                      className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition w-full h-full"
                       onClick={() => {
                         setFormThatWantToBeDeleted(form.form_id);
                         onDelete();
@@ -244,28 +445,25 @@ const AdminHomePage = () => {
                     </button>
 
                     <button
-                      className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
+                      className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition w-full h-full"
                       onClick={() => {
                         setFormThatWantToBeEdited(form);
-                        setIsPopUpForEditingClicked(true)
+                        setIsPopUpForEditingClicked(true);
                       }}
                     >
                       Edit
                     </button>
 
                     <button
-                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition w-full h-full"
                       onClick={() => {
-                        setFormThatWantToPrintReport(form.form_id);
-                        setIsPopUpForReportsClicked(true)
+                        setFormThatWantToPrintReport(form);
+                        setIsPopUpForReportsClicked(true);
                       }}
                     >
-                      Print Reports
+                      Reports
                     </button>
                   </div>
-
-
-
                 </div>
               ))}
 
@@ -501,7 +699,7 @@ const AdminHomePage = () => {
                 value={formThatWantToBeEdited.title}
                 onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
                   ...prevForm, // keep the existing properties
-                  title: e.target.value, 
+                  title: e.target.value,
                 }))}
                 className="w-full p-2 border rounded"
                 placeholder="Enter plan title"
@@ -509,51 +707,51 @@ const AdminHomePage = () => {
             </div>
 
             <div className="mb-4">
-                <label htmlFor="description" className="block text-gray-700 mb-2">Description</label>
-                <textarea
-                  id="description"
-                  value={formThatWantToBeEdited.description}
-                  onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
-                    ...prevForm, // keep the existing properties
-                    description: e.target.value, 
-                  }))}
-                  className="w-full p-2 border rounded"
-                  placeholder="Enter description"
-                  required
-                />
-              </div>
+              <label htmlFor="description" className="block text-gray-700 mb-2">Description</label>
+              <textarea
+                id="description"
+                value={formThatWantToBeEdited.description}
+                onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
+                  ...prevForm, // keep the existing properties
+                  description: e.target.value,
+                }))}
+                className="w-full p-2 border rounded"
+                placeholder="Enter description"
+                required
+              />
+            </div>
 
-              <div className="mb-4">
-                <label htmlFor="start_date" className="block text-gray-700 mb-2">Start Date</label>
-                <input
-                  type="date"
-                  id="start_date"
-                  value={formatDate(formThatWantToBeEdited.start_date)}
-                  onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
-                    ...prevForm, // keep the existing properties
-                    start_date: e.target.value, 
-                  }))}
-                  className="w-full p-2 border rounded"
-                  required
-                />
-              </div>
+            <div className="mb-4">
+              <label htmlFor="start_date" className="block text-gray-700 mb-2">Start Date</label>
+              <input
+                type="date"
+                id="start_date"
+                value={formatDate(formThatWantToBeEdited.start_date)}
+                onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
+                  ...prevForm, // keep the existing properties
+                  start_date: e.target.value,
+                }))}
+                className="w-full p-2 border rounded"
+                required
+              />
+            </div>
 
-              <div className="mb-4">
-                <label htmlFor="end_date" className="block text-gray-700 mb-2">End Date</label>
-                <input
-                  type="date"
-                  id="end_date"
-                  value={formatDate(formThatWantToBeEdited.end_date)}
-                  onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
-                    ...prevForm, // keep the existing properties
-                    end_date: e.target.value, 
-                  }))}
-                  className="w-full p-2 border rounded"
-                  required
-                />
-              </div>
+            <div className="mb-4">
+              <label htmlFor="end_date" className="block text-gray-700 mb-2">End Date</label>
+              <input
+                type="date"
+                id="end_date"
+                value={formatDate(formThatWantToBeEdited.end_date)}
+                onChange={(e) => setFormThatWantToBeEdited(prevForm => ({
+                  ...prevForm, // keep the existing properties
+                  end_date: e.target.value,
+                }))}
+                className="w-full p-2 border rounded"
+                required
+              />
+            </div>
 
-            
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setIsPopUpForEditingClicked(false)}
@@ -575,52 +773,169 @@ const AdminHomePage = () => {
 
       )}
       {isPopUpForReportsClicked && (
-        
-
-
         <div
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
-        onClick={() => setIsPopUpForReportsClicked(false)} // if user clicks outside, it will exit
-      >
-        <div
-          className="bg-white p-6 rounded-lg shadow-lg w-96"
-          onClick={(e) => e.stopPropagation()} // prevents the button from triggering click event on parent elements
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setIsPopUpForReportsClicked(false)}
         >
-          <h2 className="text-xl font-bold mb-4">Add New Plan</h2>
+          <div
+            className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">
+              Choose A Report
+            </h2>
 
-          <div className="mb-4">
-            <label htmlFor="title" className="block text-gray-700 mb-2">Title</label>
-            <input
-              type="text"
-              id="title"
-              value={newFormName}
-              onChange={(e) => setNewFormName(e.target.value)}
-              className="w-full p-2 border rounded"
-              placeholder="Enter plan title"
-            />
-          </div>
-          
-          <div className="flex justify-end gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-2 transition"
+                onClick={() => getAllCoursePriorityLists()}
+              >
+                All Courses Priority Lists
+              </button>
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-2 transition"
+                onClick={() => setIsPopUpForSpecificCourseClicked(true)}
+              >
+                Specific Course Priority List
+              </button>
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-2 transition"
+                onClick={() => getFormCourseStats()}
+              >
+                Courses Stats
+              </button>
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-2 transition"
+                onClick={() => getGraduatingStudentCourses()}
+              >
+                Graduating Student Courses
+              </button>
+
+              {/* Full‑width on all screens */}
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-6 w-full sm:col-span-2 transition"
+                onClick={() => setIsPopUpForAiClicked(true)}
+              >
+                Generate Section Schedule Using AI
+              </button>
+            </div>
+
+
             <button
+              className="mt-6 w-full text-center bg-gray-300 rounded-lg px-4 py-2 hover:bg-gray-400 transition"
               onClick={() => setIsPopUpForReportsClicked(false)}
-              className="mt-2 px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {isPopUpForSpecificCourseClicked && (
+
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setIsPopUpForSpecificCourseClicked(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="mb-3 text-base font-semibold text-gray-700">Select a Course:</h4>
+
+
+            <div className="space-y-2">
+              {getAllCoursesInPlan(formThatWantToPrintReport).map((courseCode) => (
+                <button
+                  key={courseCode}
+                  onClick={() => {
+                    setSpecificCourse(courseCode)
+                    getCoursePriorityList()
+                  }}
+                  className="block w-full cursor-pointer rounded-md border border-gray-300 bg-white px-4 py-2 text-left text-sm text-gray-900 transition duration-150 ease-in-out hover:bg-gray-100 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75"
+                >
+                  {courseCode}
+                </button>
+              ))}
+            </div>
             <button
-              onClick={console.log("WIP")}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="mt-6 w-full text-center bg-gray-300 rounded-lg px-4 py-2 hover:bg-gray-400 transition"
+              onClick={() => setIsPopUpForSpecificCourseClicked(false)}
             >
-              Edit Form
+              Cancel
             </button>
           </div>
         </div>
-      </div>
-
-
-
 
       )}
+      {isPopUpForAiClicked && (
+
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setIsPopUpForAiClicked(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+
+            <div className="mb-4">
+              <label htmlFor="title" className="block text-gray-700 mb-2">Section Capacity</label>
+              <input
+                type="number"
+                id="title"
+                value={sectionCapacity}
+                onChange={(e) => {
+                  if(e.target.value>=1 || e.target.value=="")
+                  setSectionCapacity(e.target.value)}
+                }
+                className="w-full p-2 border rounded"
+                placeholder="Ex. 25"
+                required
+              />
+            </div>
+
+            <div className="mt-4 flex space-x-4">
+                    <button
+                      className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition w-full h-full"
+                      
+                      onClick={() => {
+                        setTimePreference("MorningAndAfternoonFocus")
+                      }}
+                    >
+                      Morning And Afternoon Focus
+                    </button>
+
+                    <button
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition w-full h-full"
+                      onClick={() => {
+                        setTimePreference("AfternoonAndEveningFocus")
+                      }}
+                    >
+                      Afternoon And Evening Focus
+                    </button>
+                  </div>
+
+                  <button
+              className="mt-4 w-full text-center bg-blue-500 rounded-lg px-4 py-2 hover:bg-blue-600 transition"
+              onClick={() => generateSectionSchedule()}
+            >
+              Confirm
+            </button>
+                  
+            <button
+              className="mt-2 w-full text-center bg-gray-300 rounded-lg px-4 py-2 hover:bg-gray-400 transition"
+              onClick={() => setIsPopUpForAiClicked(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+
+      )}
+
+
+
     </>
   );
 };
