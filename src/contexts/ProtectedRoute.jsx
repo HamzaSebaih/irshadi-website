@@ -22,7 +22,7 @@ export function AdminRoute({ children }) { //this for admin route
     return <Navigate to="/login" />;
   }
 
-  if (extraInfo.role !== 'admin') {
+  if (extraInfo?.role !== 'admin') {
     return <Navigate to="/unauthorized" />;
   }
 
@@ -38,7 +38,7 @@ export function StudentRoute({ children }) { //this for student route
     return <Navigate to="/login" />;
   }
 
-  if (extraInfo.role !== 'student') {
+  if (extraInfo?.role !== 'student') {
     return <Navigate to="/unauthorized" />;
   }
 
