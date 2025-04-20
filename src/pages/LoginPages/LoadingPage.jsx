@@ -10,8 +10,10 @@ const LoadingPage = () => {
 
   // Handle navigation logic in useEffect
   useEffect(() => {
+    console.log(extraInfo?.role)
     if (!user) {
       navigate("/login");
+      return
     } else if (!loadingExtra) {
       // Once extra info is loaded, navigate based on role
       if (extraInfo?.role === "admin") {
@@ -20,9 +22,10 @@ const LoadingPage = () => {
         navigate('/studentHomePage');
       }
       else{
-        setTimeout(() => { //this will fix the issue where it's loading forever
-          window.location.reload(); //in case the fetch failed it will reload the page every 1.5 second 
-        }, 1500); // 1.5 seconds delay
+        return
+        // setTimeout(() => { //this will fix the issue where it's loading forever
+        //   window.location.reload(); //in case the fetch failed it will reload the page every 1.5 second 
+        // }, 1500); // 1.5 seconds delay
       }
     }
   }, [user, loadingExtra, extraInfo, navigate]);

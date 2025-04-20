@@ -17,7 +17,7 @@ const SignupPage = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [validationErrors, setValidationErrors] = useState({});
-  const { signup } = useAuth();
+  const { signup,logout } = useAuth();
   const navigate = useNavigate();
   const auth = getAuth();
   const googleProvider = new GoogleAuthProvider();
@@ -58,6 +58,7 @@ const SignupPage = () => {
     try {
       const userCredential = await signup(email, password);
       await sendEmailVerification(userCredential.user);
+      await logout();
       console.log("Email/Password Signup Successful, Verification Email Sent");
       setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
       
