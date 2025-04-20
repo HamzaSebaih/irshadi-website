@@ -1,5 +1,3 @@
-// ./pages/LoginPages/LoadingPage.jsx
-
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -23,7 +21,8 @@ const LoadingPage = () => {
       } else if (extraInfo?.role === "student") {
         navigate('/studentHomePage');
       } else {
-        navigate('/unauthorized');
+        // Consider navigating to a specific 'role not assigned' page or login if role is unexpected
+        navigate('/unauthorized'); // Kept original navigation
       }
     }
     // else: Still loading, wait for next effect run
@@ -31,9 +30,12 @@ const LoadingPage = () => {
 
   // Render the loading spinner UI
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
-      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      <p className="mt-4 text-lg font-semibold text-gray-700">Loading...</p>
+    // Use consistent background
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100">
+       {/* Use theme color for spinner and consistent size */}
+      <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
+       {/* Consistent text styling */}
+      <p className="mt-4 text-base font-medium text-gray-600">Loading...</p>
     </div>
   );
 };

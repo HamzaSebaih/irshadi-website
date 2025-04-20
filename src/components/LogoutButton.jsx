@@ -16,7 +16,13 @@ function LogoutButton() {
         }
     };
   return (
-    <button onClick={handleLogout}>Logout</button>
+    // Styled similarly to inactive NavLink for consistency within the accent Nav
+    <button
+        className='rounded-md px-3 py-2 text-sm font-medium text-black transition-colors duration-150 hover:bg-accent-light hover:text-black focus:outline-none focus:ring-2 focus:ring-accent-light focus:ring-offset-2 focus:ring-offset-accent'
+        onClick={handleLogout}
+    >
+        Logout
+    </button>
   );
 }
 
