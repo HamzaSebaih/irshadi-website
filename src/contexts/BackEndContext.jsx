@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext"; 
 
-const backendIp = "http://127.0.0.1:5000"; // or import it from your config
+const backendIp = "http://127.0.0.1:5000";
 const ExtraInfoContext = createContext();
 
 export const useExtraInfo = () => useContext(ExtraInfoContext);
