@@ -23,12 +23,17 @@ const LoginPage = () => {
     e.preventDefault();
     setError("");
     try {
-      await login(email, password);
+      const userCredential = await login(email, password);
+      const user = userCredential.user;
+      if (!user.emailVerified) {
+        setError("Please verify your email address to log in. Check your inbox for the verification email.");
+        return;
+      }
       navigate("/loading");
     } catch (error) {
       setError("The Email address or Password is incorrect");
     }
-  };
+};
 
   async function handleGoogleLogin() {
     try {
