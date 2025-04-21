@@ -14,14 +14,15 @@ const LoadingPage = () => {
       navigate("/login");
       return;
     }
-
     if (!loadingExtra) {
       if (extraInfo?.role === "admin") {
         navigate('/adminHomePage');
       } else if (extraInfo?.role === "student") {
         navigate('/studentHomePage');
       } else {
-        navigate('/Unverified'); // Kept original navigation
+        setTimeout(() => { //this will fix the issue where it's loading forever
+          window.location.reload(); //in case the fetch failed it will reload the page every 1.5 second 
+        }, 1500); // 1.5 seconds delay
       }
     }
     // else: Still loading, wait for next effect run
