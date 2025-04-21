@@ -19,6 +19,7 @@ import PlanDetailsPage from './pages/AdminPages/PlanDetailsPage';
 import AboutPage from './pages/About&Terms/AboutPage'
 import TermsPage from './pages/About&Terms/TermsPage'
 import SignUpPage from './pages/LoginPages/SignupPage';
+import Unverified from './pages/LoginPages/Unverified';
 
 
 const App = () => {
@@ -40,6 +41,7 @@ const App = () => {
           <Route path="/About" element={<AboutPage />} />
           <Route path="/Terms" element={<TermsPage />} />
           <Route path="/ProfileCompletionPage" element={<ProfileCompletionPage />} />
+          <Route path="/Unverified" element={<Unverified />} />
 
         
 
