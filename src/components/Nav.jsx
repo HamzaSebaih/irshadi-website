@@ -15,7 +15,9 @@ const Nav = () => {
   const activeClassName = "bg-accent-dark text-black";
   const inactiveClassName = "text-black hover:bg-accent-light hover:text-black"; // Using black text for contrast on default accent bg
 
+
   return (
+    
     <>
       <nav className="bg-accent shadow-md border-b border-accent-dark">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
@@ -101,7 +103,7 @@ const Nav = () => {
           )}
         </div>
       </nav>
-      {(isPopupOpen && isAdmin) && (
+      {(isPopupOpen && isAdmin && user?.emailVerified) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onClick={() => setIsPopupOpen(false)}
