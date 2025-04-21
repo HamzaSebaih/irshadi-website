@@ -57,13 +57,14 @@ const SignupPage = () => {
 
     try {
       const userCredential = await signup(email, password);
+      setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
       await sendEmailVerification(userCredential.user);
       await logout();
       console.log("Email/Password Signup Successful, Verification Email Sent");
       setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
       
       setTimeout(() => {
-        navigate("/LoginP");
+        navigate("/LoginPage");
       }, 3000);
     } catch (error) {
       console.error("Email/Password Signup Error:", error.code, error.message);

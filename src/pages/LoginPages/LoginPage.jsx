@@ -24,27 +24,26 @@ const LoginPage = () => {
     setError("");
     try {
       const userCredential = await login(email, password);
-      const user = userCredential.user;
-      if (!user.emailVerified) {
-        setError("Please verify your email address to log in. Check your inbox for the verification email.");
-        return;
+ 
+      if(auth.currentUser.emailVerified){
+        console.log("email verified")
       }
       navigate("/loading");
     } catch (error) {
       setError("The Email address or Password is incorrect");
     }
-};
+  };
 
   async function handleGoogleLogin() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
 
-       //Check if it's a new user
-           if (result.additionalUserInfo?.isNewUser) {
-      navigate('/ProfileCompletionPage');
-           } else {
-         navigate('/loading');
-       }
+      //Check if it's a new user
+      if (result.additionalUserInfo?.isNewUser) {
+        navigate('/ProfileCompletionPage');
+      } else {
+        navigate('/loading');
+      }
     } catch (error) {
       setError('Failed to login with Google.');
     }
@@ -177,12 +176,12 @@ const LoginPage = () => {
 
             {/* OR Divider */}
             <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                    <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                    <span className="bg-white px-2 text-gray-500">OR</span>
-                </div>
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-white px-2 text-gray-500">OR</span>
+              </div>
             </div>
 
 

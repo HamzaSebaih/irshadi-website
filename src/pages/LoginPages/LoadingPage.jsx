@@ -21,8 +21,7 @@ const LoadingPage = () => {
       } else if (extraInfo?.role === "student") {
         navigate('/studentHomePage');
       } else {
-        // Consider navigating to a specific 'role not assigned' page or login if role is unexpected
-        navigate('/unauthorized'); // Kept original navigation
+        navigate('/Unverified'); // Kept original navigation
       }
     }
     // else: Still loading, wait for next effect run
