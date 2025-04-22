@@ -12,106 +12,144 @@ const Nav = () => {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const isAdmin = extraInfo?.role === "admin";
 
-  const activeClassName = "bg-accent-dark text-black";
-  const inactiveClassName = "text-black hover:bg-accent-light hover:text-black"; // Using black text for contrast on default accent bg
-
+  // Enhanced styling for active and inactive nav items with better colors
+  const activeClassName = "bg-primary-dark text-white font-semibold shadow-md transform scale-105";
+  const inactiveClassName = "text-white hover:bg-primary-light hover:text-white transition-all duration-300 hover:shadow-md";
 
   return (
-    
     <>
-      <nav className="bg-accent shadow-md border-b border-accent-dark">
-        <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          {/* Left Side */}
-          <ul className="flex items-center space-x-4 md:space-x-6">
-            {isAuth ? (
-              <>
-                {isAdmin ? (
-                  <>
-                    <li>
-                      <NavLink
-                        to="/AdminHomePage"
-                        className={({ isActive }) =>
-                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
-                        }
-                      >
-                        Home
-                      </NavLink>
-                    </li>
-                    <li>
-                       <NavLink
-                        to="/AdminStudyPlansPage"
-                         className={({ isActive }) =>
-                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
-                        }
-                      >
-                        Study Plans
-                      </NavLink>
-                    </li>
-                    <li>
-                      <button
-                         className={`rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${inactiveClassName}`} // Styled like a NavLink
-                        onClick={() => setIsPopupOpen(true)}
-                      >
-                        Courses
-                      </button>
-                    </li>
-                  </>
-                ) : (
-                  <>
-                    <li>
-                      <NavLink
-                        to="/StudentHomePage"
-                         className={({ isActive }) =>
-                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
-                        }
-                      >
-                        Home
-                      </NavLink>
-                    </li>
-                    <li>
-                      <NavLink
-                        to="/AvailableForms"
-                         className={({ isActive }) =>
-                            `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
-                        }
-                      >
-                        Available Forms
-                      </NavLink>
-                    </li>
-                  </>
-                )}
-              </>
-            ) : (
+      <nav className="bg-gradient-to-r from-primary to-primary-dark shadow-lg border-b-2 border-secondary sticky top-0 z-40">
+        <div className="container mx-auto flex items-center justify-between px-6 py-4">
+          {/* Left Side - Logo and Main Navigation */}
+          <div className="flex items-center">
+            {/* Only show Portal title when logged in */}
+            {isAuth && (
+              <div className="text-white font-bold text-xl mr-6">
+                {isAdmin ? "Admin Portal" : "Student Portal"}
+              </div>
+            )}
+            
+            {/* Main Navigation Links */}
+            <ul className="flex items-center space-x-1 md:space-x-2">
+              {isAuth ? (
+                <>
+                  {isAdmin ? (
+                    <>
+                      <li>
+                        <NavLink
+                          to="/AdminHomePage"
+                          className={({ isActive }) =>
+                            `rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? activeClassName : inactiveClassName}`
+                          }
+                        >
+                          Dashboard
+                        </NavLink>
+                      </li>
+                      <li>
+                        <NavLink
+                          to="/AdminStudyPlansPage"
+                          className={({ isActive }) =>
+                            `rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? activeClassName : inactiveClassName}`
+                          }
+                        >
+                          Study Plans
+                        </NavLink>
+                      </li>
+                      <li>
+                        <button
+                          className={`rounded-lg px-4 py-2 text-sm font-medium ${inactiveClassName}`}
+                          onClick={() => setIsPopupOpen(true)}
+                        >
+                          Courses
+                        </button>
+                      </li>
+                    </>
+                  ) : (
+                    <>
+                      <li>
+                        <NavLink
+                          to="/StudentHomePage"
+                          className={({ isActive }) =>
+                            `rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? activeClassName : inactiveClassName}`
+                          }
+                        >
+                          Dashboard
+                        </NavLink>
+                      </li>
+                      <li>
+                        <NavLink
+                          to="/AvailableForms"
+                          className={({ isActive }) =>
+                            `rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? activeClassName : inactiveClassName}`
+                          }
+                        >
+                          Available Forms
+                        </NavLink>
+                      </li>
+                    </>
+                  )}
+                </>
+              ) : (
+                <li>
+                  <NavLink
+                    to="/"
+                    className={({ isActive }) =>
+                      `rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? activeClassName : inactiveClassName}`
+                    }
+                  >
+                    Login
+                  </NavLink>
+                </li>
+              )}
+              
+              {/* About link - always visible for all users, positioned at the end of the left navigation */}
               <li>
                 <NavLink
-                  to="/"
-                   className={({ isActive }) =>
-                      `rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${isActive ? activeClassName : inactiveClassName}`
-                   }
+                  to="/about"
+                  className={({ isActive }) =>
+                    `rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? activeClassName : inactiveClassName}`
+                  }
                 >
-                  Login
+                  About
                 </NavLink>
               </li>
-            )}
-          </ul>
+              
+              {/* Terms link - only visible when logged in, positioned after About */}
+              {isAuth && (
+                <li>
+                  <NavLink
+                    to="/terms"
+                    className={({ isActive }) =>
+                      `rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? activeClassName : inactiveClassName}`
+                    }
+                  >
+                    Terms
+                  </NavLink>
+                </li>
+              )}
+            </ul>
+          </div>
 
-          {/* Right Side - Logout Button */}
+          {/* Right Side - LogoutButton only with white text */}
           {isAuth && (
-            <div>
+            <div className="text-white">
               <LogoutButton />
             </div>
           )}
         </div>
       </nav>
+      
+      {/* Popup for Courses */}
       {(isPopupOpen && isAdmin && user?.emailVerified) && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm transition-all duration-300"
           onClick={() => setIsPopupOpen(false)}
         >
           <div
+            className="rounded-xl shadow-2xl transform transition-all duration-300 animate-fadeIn"
             onClick={(e) => e.stopPropagation()}
           >
-            <ShowCoursesPopUp/>
+            <ShowCoursesPopUp />
           </div>
         </div>
       )}
