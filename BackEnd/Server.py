@@ -2581,8 +2581,8 @@ def get_form_courses(decoded_token):
     Requires user authentication. Expects form_id in the JSON request body.
     VALIDATES that the student's record was updated AFTER the form's start date.
     Returns lists of available, unavailable (prereqs not met), unavailable (finished),
-    recommended courses, the student's previously selected courses, AND the form's
-    max_graduate_hours limit.
+    recommended courses, the student's previously selected courses, the form's
+    max_graduate_hours limit, AND a map of available course IDs to their credit hours.
     Recommendations prioritize 'important' courses (prerequisites for others)
     from the earliest available level. Includes fallback logic.
     """
@@ -2623,7 +2623,6 @@ def get_form_courses(decoded_token):
         form_data = form_doc.to_dict()
         plan_id = form_data.get('plan_id')
         form_start_date = form_data.get('start_date') # Get form start date
-        # *** Get max_graduate_hours from form data (NEW) ***
         max_graduate_hours_from_form = form_data.get('max_graduate_hours')
 
         if not plan_id:
@@ -2638,18 +2637,15 @@ def get_form_courses(decoded_token):
              return jsonify({"error": "Form configuration is incomplete or invalid (max_graduate_hours)."}), 500
 
         # --- 2b. Validate Student Data Freshness ---
-        # Ensure student_last_updated is a datetime object
         if not isinstance(student_last_updated, datetime):
             return jsonify({"error": "Please update your academic record using the extension before accessing this form."}), 403
 
-        # Ensure timestamps are comparable (make them timezone-aware, assuming UTC if missing)
         form_start_date_utc = form_start_date.replace(tzinfo=timezone.utc) if form_start_date.tzinfo is None else form_start_date
         student_last_updated_utc = student_last_updated.replace(tzinfo=timezone.utc) if student_last_updated.tzinfo is None else student_last_updated
 
         if student_last_updated_utc <= form_start_date_utc:
             return jsonify({"error": "Your academic record is outdated relative to this form. Please update it using the extension."}), 403
         # --- End Freshness Check ---
-
 
         # --- 3. Get Previous Response ---
         previously_selected_courses = []
@@ -2660,7 +2656,6 @@ def get_form_courses(decoded_token):
                 courses = student_previous_response.get('selected_courses', [])
                 if isinstance(courses, list):
                      previously_selected_courses = courses
-
 
         # --- 4. Get Plan Structure ---
         plan_ref = db.collection('Plans').document(plan_id)
@@ -2690,9 +2685,10 @@ def get_form_courses(decoded_token):
 
         all_plan_course_ids = list(set(c[0] for c in all_plan_courses_with_level))
 
-        # --- 6. Fetch Prerequisites for All Plan Courses ---
-        course_prereqs = collections.defaultdict(list)
-        if all_plan_course_ids: # Only fetch if there are courses in the plan
+        # --- 6. Fetch Details (Prereqs & Hours) for All Plan Courses ---
+        # Store details in a map for easy lookup later
+        course_details_map = {} # {course_id: {"hours": H, "prerequisites": [...]}}
+        if all_plan_course_ids:
              course_refs_to_get = [db.collection('Courses').document(cid) for cid in all_plan_course_ids]
              course_docs = db.get_all(course_refs_to_get)
 
@@ -2701,15 +2697,25 @@ def get_form_courses(decoded_token):
                        course_id = course_doc.id
                        course_data = course_doc.to_dict()
                        prereqs = course_data.get('prerequisites', [])
-                       if isinstance(prereqs, list):
-                            course_prereqs[course_id] = prereqs
+                       hours = course_data.get('hours', 0) # Default hours to 0 if missing
+                       # Store details
+                       course_details_map[course_id] = {
+                           "hours": hours if isinstance(hours, int) else 0, # Ensure hours is int
+                           "prerequisites": prereqs if isinstance(prereqs, list) else [] # Ensure prereqs is list
+                       }
+                  else:
+                       print(f"Warning: Course document {course_doc.id} mentioned in plan {plan_id} not found in Courses collection.")
+                       # Store placeholder if course doc missing
+                       course_details_map[course_doc.id] = {"hours": 0, "prerequisites": []}
+
 
         # --- 6b. Calculate Dependency Count ---
         dependency_count = collections.defaultdict(int)
         for course_id in all_plan_course_ids:
             for other_course_id in all_plan_course_ids:
                  if other_course_id == course_id: continue
-                 prereqs = course_prereqs.get(other_course_id, [])
+                 # Use the fetched details map
+                 prereqs = course_details_map.get(other_course_id, {}).get("prerequisites", [])
                  if course_id in prereqs:
                       dependency_count[course_id] += 1
 
@@ -2723,7 +2729,8 @@ def get_form_courses(decoded_token):
                  unavailable_finished.append(course_id)
                  continue
 
-            prereqs_for_course = set(course_prereqs.get(course_id, []))
+            # Use the fetched details map for prerequisites
+            prereqs_for_course = set(course_details_map.get(course_id, {}).get("prerequisites", []))
             if prereqs_for_course.issubset(finished_courses_set):
                  available_courses.append(course_id)
             else:
@@ -2732,6 +2739,7 @@ def get_form_courses(decoded_token):
 
 
         # --- 8. Recommendation Logic with Fallback ---
+        # (Logic remains the same as previous version)
         recommended_courses = []
         min_level_num = float('inf')
         available_courses_set = set(available_courses)
@@ -2758,12 +2766,25 @@ def get_form_courses(decoded_token):
             recommended_courses = [item[0] for item in available_with_deps]
 
 
-        # --- 9. Return Response --- (Renumbered from 8)
+        # --- 8b. Create Map of Available Course Hours (NEW STEP) ---
+        available_course_hours = {}
+        for course_id in available_courses:
+             # Look up hours in the details map fetched earlier
+             details = course_details_map.get(course_id)
+             if details:
+                  available_course_hours[course_id] = details.get("hours", 0) # Default to 0 if hours missing in details
+             else:
+                  available_course_hours[course_id] = 0 # Default if course details somehow weren't fetched
+        # --- End Course Hours Map ---
+
+
+        # --- 9. Return Response ---
         return jsonify({
             "form_id": form_id,
             "plan_id": plan_id,
-            "max_graduate_hours": max_graduate_hours_from_form, # *** Added field ***
+            "max_graduate_hours": max_graduate_hours_from_form,
             "available_courses": available_courses,
+            "available_course_hours": available_course_hours, # *** Added new map ***
             "recommended_courses": recommended_courses,
             "unavailable_due_to_prerequisites": unavailable_prereqs,
             "unavailable_due_to_completion": unavailable_finished,
