@@ -2298,10 +2298,12 @@ def handle_extension_update():
         # Catch any other unexpected errors
         return jsonify({"error": "An unexpected error occurred: " + str(e)}), 500
 
+
 def update_student_data(uid):
     """
-    Parses HTML from the request, extracts student academic info,
-    maps the major to English, and updates the student document in Firestore.
+    Parses HTML from the request, extracts student academic info (including
+    completed, equivalent, AND currently registered courses), maps the major
+    to English, and updates the student document in Firestore.
     Called by handle_extension_update.
     """
     MAJOR_MAPPING = {
@@ -2316,7 +2318,6 @@ def update_student_data(uid):
         raise ValueError("No HTML provided")
 
     # Reference to the student document in Firestore
-    # NOTE: Collection name 'Students' kept as is.
     student_document = db.collection('Students').document(uid)
 
     # Parse HTML
@@ -2324,16 +2325,47 @@ def update_student_data(uid):
 
     # General info extraction
     general_info = {}
+    finished_courses = [] # Initialize list for finished/equivalent/current courses
+    currently_registered_courses_set = set() # Use a set for uniqueness of current courses
 
-    # Find the academic info table (using original logic)
-    academic_tables = soup.find_all('table', class_='datadisplaytable', attrs={'border': '1', 'width': '800'})
+    # Find all potential tables
+    all_tables = soup.find_all('table', class_='datadisplaytable', attrs={'border': '1', 'width': '800'})
+
     academic_table = None
-    for table in academic_tables:
-        prev_elem = table.find_previous('td', class_='pldefault')
-        if prev_elem and 'معلومات الطالب الاكاديمية' in prev_elem.text:
-            academic_table = table
-            break
+    transcript_tables = []
+    equivalent_courses_table = None
+    current_courses_table = None # Table for currently registered courses
 
+    # --- Identify the different tables based on preceding headers ---
+    # (Logic for identifying tables remains the same as previous version)
+    for table in all_tables:
+        prev_header_elem = table.find_previous('td', class_='pldefault')
+        if prev_header_elem:
+            header_text = prev_header_elem.text.strip()
+            if 'معلومات الطالب الاكاديمية' in header_text:
+                academic_table = table
+                potential_current_table = academic_table.find_next_sibling('table', class_='datadisplaytable')
+                if potential_current_table:
+                     headers_in_next = [th.text.strip() for th in potential_current_table.find_all('th', class_='ddheader')]
+                     # Check based on the header "الجدول الدراسي" preceding the table
+                     schedule_header = potential_current_table.find_previous('td', class_='pldefault')
+                     if schedule_header and 'الجدول الدراسي' in schedule_header.text:
+                          current_courses_table = potential_current_table
+                          print("Found potential 'Currently Registered Courses' table (based on 'الجدول الدراسي' header).")
+                     elif 'المقرر' in headers_in_next: # Fallback check if header isn't perfect
+                          current_courses_table = potential_current_table
+                          print("Found potential 'Currently Registered Courses' table (based on 'المقرر' column).")
+
+
+            elif 'المقررات المعادلة' in header_text:
+                equivalent_courses_table = table
+            else:
+                 headers = [th.text.strip() for th in table.find_all('th', class_='ddheader')]
+                 if 'مسجلة' in headers and 'مجتازة' in headers and 'التقدير' in headers:
+                      transcript_tables.append(table)
+
+    # --- 1. Process Academic Info Table ---
+    # (Logic remains the same as previous version)
     if academic_table:
         print("Academic table found, extracting rows...")
         rows = academic_table.find_all('tr')
@@ -2343,11 +2375,8 @@ def update_student_data(uid):
             for i in range(len(ths)):
                 key = ths[i].text.strip()
                 value = tds[i].text.strip()
-                print(f"Extracted: Key='{key}', Value='{value}'")
-
-                # Matching logic for each key (simplified for brevity, use original logic)
                 if key == 'رقم الطالب': general_info['Student_ID'] = value
-                elif key == 'التخصص': general_info['major'] = value # Keep original Arabic here
+                elif key == 'التخصص': general_info['major'] = value
                 elif key == 'الساعات المسجلة': general_info['hours_registered'] = int(value) if value.isdigit() else 0
                 elif key == 'الساعات المجتازة': general_info['hours_completed'] = int(value) if value.isdigit() else 0
                 elif key == 'ساعات المعدل': general_info['gpa_hours'] = int(value) if value.isdigit() else 0
@@ -2356,40 +2385,32 @@ def update_student_data(uid):
                     try: general_info['gpa'] = float(value)
                     except ValueError: general_info['gpa'] = 0.0
     else:
-        print("Warning: Academic table not found") # Changed to warning
-
-    # Extract finished courses (using original logic)
-    finished_courses = []
-    # ...(original logic for parsing transcript tables)...
-    for table in academic_tables:
-        headers = [th.text.strip() for th in table.find_all('th', class_='ddheader')]
-        if 'مسجلة' in headers and 'مجتازة' in headers and 'التقدير' in headers:
-            print("Found transcript table, extracting courses...")
-            rows = table.find_all('tr')[1:]
-            for row in rows:
-                cols = row.find_all('td', class_='dddefault')
-                if len(cols) >= 7:
-                    dept = cols[0].text.strip()
-                    course_num = cols[1].text.strip()
-                    course_code = f"{dept}-{course_num}"
-                    try:
-                        hours_registered = int(cols[3].text.strip())
-                        hours_passed = int(cols[4].text.strip())
-                    except ValueError: continue
-                    grade = cols[6].text.strip()
-                    if hours_registered > 0 and hours_registered == hours_passed and grade not in ['F', 'W','DN']:
-                         if course_code not in finished_courses:
-                              finished_courses.append(course_code)
+        print("Warning: Academic table not found")
 
 
-    # Extract equivalent courses (using original logic)
-    # ...(original logic for parsing equivalent courses table)...
-    equivalent_courses_table = None
-    for table in academic_tables:
-        prev_elem = table.find_previous('td', class_='pldefault')
-        if prev_elem and 'المقررات المعادلة' in prev_elem.text:
-            equivalent_courses_table = table
-            break
+    # --- 2. Process Transcript Tables (Finished Courses) ---
+    # (Logic remains the same as previous version)
+    for table in transcript_tables:
+        print("Found transcript table, extracting finished courses...")
+        rows = table.find_all('tr')[1:]
+        for row in rows:
+            cols = row.find_all('td', class_='dddefault')
+            if len(cols) >= 7:
+                dept = cols[0].text.strip()
+                course_num = cols[1].text.strip()
+                if dept and course_num:
+                     course_code = f"{dept}-{course_num}"
+                     try:
+                          hours_registered = int(cols[3].text.strip())
+                          hours_passed = int(cols[4].text.strip())
+                     except ValueError: continue
+                     grade = cols[6].text.strip()
+                     if hours_passed > 0 and grade not in ['F', 'W','DN', 'IC', 'IP']:
+                          if course_code not in finished_courses:
+                               finished_courses.append(course_code)
+
+    # --- 3. Process Equivalent Courses Table ---
+    # (Logic remains the same as previous version)
     if equivalent_courses_table:
         print("Found equivalent courses table, extracting courses...")
         rows = equivalent_courses_table.find_all('tr')[1:]
@@ -2398,20 +2419,61 @@ def update_student_data(uid):
             if len(cols) >= 2:
                 dept = cols[0].text.strip()
                 course_num = cols[1].text.strip()
-                course_code = f"{dept}-{course_num}"
-                if course_code not in finished_courses:
-                    finished_courses.append(course_code)
+                if dept and course_num:
+                     course_code = f"{dept}-{course_num}"
+                     if course_code not in finished_courses:
+                          finished_courses.append(course_code)
+
+    # --- 4. Process Currently Registered Courses Table (CORRECTED LOGIC) ---
+    if current_courses_table:
+        print("Processing 'Currently Registered Courses' table...")
+        headers = [th.text.strip() for th in current_courses_table.find_all('th', class_='ddheader')]
+        try:
+            # Find the index of the 'المقرر' column
+            course_col_index = headers.index('المقرر')
+            rows = current_courses_table.find_all('tr')[1:] # Skip header row
+            for row in rows:
+                cols = row.find_all('td', class_='dddefault')
+                if len(cols) > course_col_index:
+                    # *** Directly use the text from the column ***
+                    course_code = cols[course_col_index].text.strip()
+                    # *** Basic validation: Check if it contains a hyphen and isn't empty ***
+                    if course_code and '-' in course_code:
+                        currently_registered_courses_set.add(course_code) # Add to set for uniqueness
+                    else:
+                        print(f"Warning: Skipping potential course code '{course_code}' from current schedule table (unexpected format).")
+        except ValueError:
+             print("Warning: Could not find 'المقرر' column header in the current courses table.")
+        except Exception as e:
+             print(f"Error processing current courses table: {e}")
+             traceback.print_exc() # Print full traceback for debugging
+    else:
+        print("Warning: 'Currently Registered Courses' table not found or identified.")
+    # --- End Corrected Logic ---
+
+    # --- Combine finished, equivalent, and current courses ---
+    # Add unique current courses to the finished list
+    for course_code in currently_registered_courses_set:
+        if course_code not in finished_courses:
+            finished_courses.append(course_code)
+    # --- End Combining ---
 
 
-    # --- Apply Major Mapping ---
-    arabic_major = general_info.get("major", "") # Get extracted Arabic major
-    # Look up in mapping, default to original Arabic name if no mapping found
-    english_major = MAJOR_MAPPING.get(arabic_major, arabic_major)
+    # --- 5. Apply Major Mapping ---
+    arabic_major = general_info.get("major", "")
+    english_major = MAJOR_MAPPING.get(arabic_major, arabic_major) # Default to original if no mapping
     print(f"Mapping major: '{arabic_major}' -> '{english_major}'")
     # --- End Mapping ---
 
-    # Structure extracted data (using original structure)
-    extracted_data = {
+    # --- 6. Prepare Final Update Data ---
+    doc = student_document.get()
+    if not doc.exists:
+        raise ValueError("Student not found")
+
+    existing_data = doc.to_dict()
+    name_str = existing_data.get("name", "") # Preserve existing name
+
+    updated_data = {
         "Student_ID": general_info.get('Student_ID', ''),
         "hours": {
             "registered": general_info.get('hours_registered', 0),
@@ -2420,35 +2482,17 @@ def update_student_data(uid):
             "exchanged": general_info.get('hours_exchanged', 0)
         },
         "gpa": general_info.get('gpa', 0.0),
-        # "major": arabic_major, # Store the mapped version below instead
-        "Finished_Courses": finished_courses
+        "name": name_str,
+        "major": english_major,
+        "Finished_Courses": sorted(list(set(finished_courses))), # Ensure uniqueness and sort
+        "last_updated": datetime.now(timezone.utc)
     }
 
-    # Update Firestore document
-    doc = student_document.get()
-    if not doc.exists:
-        raise ValueError("Student not found")
+    # --- 7. Update Firestore ---
+    student_document.set(updated_data, merge=True) # Use merge=True to be safe
 
-    existing_data = doc.to_dict()
-    name_str = existing_data.get("name", "") # Preserve existing name
-
-    # Prepare final update data
-    updated_data = {
-        "Student_ID": extracted_data["Student_ID"],
-        "hours": extracted_data["hours"],
-        "gpa": extracted_data["gpa"],
-        "name": name_str, # Keep existing name
-        "major": english_major, # Use the mapped English major name
-        "Finished_Courses": extracted_data["Finished_Courses"],
-        "last_updated": datetime.now(timezone.utc)  # Records the current UTC time
-    }
-
-    # Use set with merge=True to update existing fields and add new ones
-    student_document.set(updated_data, merge=True)
-
-    print("Extracted Data (before mapping major):", extracted_data)
-    print("")
-    print("Updated Firestore document with data:", updated_data)
+    print(f"Finished Courses (including current): {len(finished_courses)}")
+    print("Updated Firestore document with data:", {k: v for k, v in updated_data.items() if k != 'Finished_Courses'}, f"Finished_Courses count: {len(updated_data['Finished_Courses'])}") # Avoid printing long list
 
 @app.route('/getMyForms', methods=['GET'])
 @token_required # Ensures only logged-in users (students/admins) can call this
