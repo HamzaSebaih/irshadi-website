@@ -13,6 +13,7 @@ const FillFormPage = () => {
     const [coursesObj, setCoursesObj] = useState(null); // Initialize with null
     const [selectedCourses, setSelectedCourses] = useState([]); // Store IDs of selected courses
     const [searchQuery, setSearchQuery] = useState(''); // State for search input
+    const [needUpdate,setNeedUpdate]= useState(false)
 
     useEffect(() => {
         // Redirect if form data is missing in location state
@@ -43,9 +44,15 @@ const FillFormPage = () => {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
+                    if(response.status===403){
+                        setNeedUpdate(true)
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    else{
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
                 }
-
+                
                 const data = await response.json();
                 // Use the example structure if fetch fails or for testing
                 /* const data = {
@@ -61,7 +68,7 @@ const FillFormPage = () => {
                 setCoursesObj(data);
                 // Initialize selected courses based on previously selected ones if needed
                 setSelectedCourses(data.previously_selected_courses || []);
-
+                setNeedUpdate(false)
             } catch (error) {
                 console.error("Error fetching plan details:", error);
                 // Handle fetch error (e.g., show error message)
@@ -74,40 +81,47 @@ const FillFormPage = () => {
 
     }, [location, navigate, user]); // Dependencies for the effect
 
-    const handleSubmit = ()=>{
-        //TODO naviate the user to other page
-        sendSubmit()
+    const handleSubmit = () => {
+        sendSubmit().finally(() => {
+            // Display success message
+            alert('Form submitted successfully!'); // Simple success alert
+
+            console.log("Form submitted successfully. Navigating..."); // Optional: log success
+
+            // Navigate the user after successful submission and showing the message
+            navigate('/AvailableForms'); // Navigate back to AvailableForms page
+        })
     }
 
-    const sendSubmit= async () => {
-            try {
-              const token = await user.getIdToken();
-              const body = {
+    const sendSubmit = async () => {
+        try {
+            const token = await user.getIdToken();
+            const body = {
                 form_id: location.state.form.form_id,
                 selected_courses: selectedCourses,
-              };
-              const response = await fetch(`${backendIp}/addFormResponse`, {
+            };
+            const response = await fetch(`${backendIp}/addFormResponse`, {
                 method: "POST",
                 headers: {
-                   Authorization: `${token}`,
-                  "Content-Type": "application/json",
+                    Authorization: `${token}`,
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify({ ...body }),
-              });
-        
-              if (!response.ok) {
+            });
+
+            if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
-              }
-        
-            } catch (error) {
-              console.error("Error adding form:", error);
-              alert(`Failed to add form: ${error.message}`);
             }
-          };
-          
+
+        } catch (error) {
+            console.error("Error adding form:", error);
+            alert(`Failed to add form: ${error.message}`);
+        }
+    };
 
 
-    
+
+
     // --- Handle Checkbox Changes ---
     const handleCheckboxChange = (courseId) => {
         setSelectedCourses(prevSelected =>
@@ -145,9 +159,12 @@ const FillFormPage = () => {
     }, [coursesObj, searchQuery]); // Recalculate when courses or search query changes
 
     // --- Calculate Current Workload ---
-    // TODO: You'll need course credit hour data associated with each course ID
-    // For now, let's assume each course is 3 credit hours
-    const currentWorkload = selectedCourses.length * 3; // Placeholder calculation
+    // Use reduce to sum up hours from the coursesObj based on selectedCourses
+    const currentWorkload = selectedCourses.reduce((totalHours, courseId) => {
+        // Get the hours for the current courseId from the map
+        const hours = coursesObj?.available_course_hours?.[courseId] ?? 0;
+        return totalHours + hours;
+    }, 0); // Start the sum at 0
 
     // --- Loading State ---
     if (isLoading) {
@@ -160,6 +177,23 @@ const FillFormPage = () => {
     }
 
     // --- Error State (if coursesObj is null after loading) ---
+    if (!coursesObj && needUpdate) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+                <div className="text-center p-6 bg-white rounded-lg shadow-md border border-danger-light">
+                    <h2 className="text-xl font-semibold text-danger-dark mb-2">Error Loading Form</h2>
+                    <p className="text-gray-600">Please Update your Academic records first</p>
+                    <button
+                        onClick={() => navigate("/StudentImportRecordPage")}
+                        className="mt-4 px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary-light focus:ring-offset-2"
+                    >
+                        Import Academic Records
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (!coursesObj) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
@@ -197,7 +231,7 @@ const FillFormPage = () => {
                         <div
                             className={`h-2.5 rounded-full transition-all duration-300 ease-out ${currentWorkload > coursesObj.max_graduate_hours ? 'bg-danger-dark' : 'bg-primary-light'}`} // Change color if over limit
                             style={{ width: `${coursesObj.max_graduate_hours ? Math.min((currentWorkload / coursesObj.max_graduate_hours) * 100, 100) : 0}%` }} // Cap width at 100%
-                            >
+                        >
                         </div>
                     </div>
                     {currentWorkload > coursesObj.max_graduate_hours && (
@@ -217,7 +251,7 @@ const FillFormPage = () => {
                     />
                 </div>
 
-                <div className="space-y-4"> 
+                <div className="space-y-4">
                     <CourseSection
                         title="Recommended Courses"
                         courses={filteredCourses.recommended}
