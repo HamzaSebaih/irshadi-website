@@ -21,8 +21,11 @@ export function AdminRoute({ children }) { //this for admin route
   if (!user) {
     return <Navigate to="/login" />;
   }
+  if(!user?.emailVerified){
+    return <Navigate to="/Unverified" />;
+  }
 
-  if (extraInfo.role !== 'admin') {
+  if (extraInfo?.role !== 'admin') {
     return <Navigate to="/unauthorized" />;
   }
 
@@ -37,8 +40,10 @@ export function StudentRoute({ children }) { //this for student route
   if (!user) {
     return <Navigate to="/login" />;
   }
-
-  if (extraInfo.role !== 'student') {
+  if(!user?.emailVerified){
+    return <Navigate to="/Unverified" />;
+  }
+  if (extraInfo?.role !== 'student') {
     return <Navigate to="/unauthorized" />;
   }
 
