@@ -325,7 +325,7 @@ const AdminHomePage = () => {
   const getGraduatingStudentCourses = async () => {
     try {
         const token = await user.getIdToken();
-        const response = await fetch(`${backendIp}/getGraduatingStudentCourses`, {
+        const response = await fetch(`${backendIp}/getGraduatingStudents`, {
             method: "POST",
             headers: {
                 Authorization: `${token}`,
