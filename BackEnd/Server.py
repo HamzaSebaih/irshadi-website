@@ -1500,7 +1500,7 @@ def get_graduating_students_from_form(decoded_token):
     Requires admin authentication.
     Expects JSON: {"form_id": "FORM_ID"}
     Returns a JSON object containing the form_id and a list of graduating student objects,
-    each containing: student_id, name, email, gpa.
+    each containing: university_student_id, name, email, gpa.
     """
     form_id = None # Initialize for error logging
     try:
@@ -1535,7 +1535,6 @@ def get_graduating_students_from_form(decoded_token):
                     graduating_student_uids.append(student_uid)
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
-             # Continue with empty list if Form_Responses isn't a map
 
         # --- 4. Fetch Details for Graduating Students (Batch Fetch) ---
         graduating_students_details = []
@@ -1546,9 +1545,12 @@ def get_graduating_students_from_form(decoded_token):
             for student_doc in student_docs:
                 if student_doc.exists:
                     student_data = student_doc.to_dict()
+                    # *** Get the University Student ID from the document ***
+                    university_student_id = student_data.get("Student_ID", "N/A_ID") # Key from update_student_data
+
                     student_detail = {
-                        "student_id": student_doc.id,
-                        # Use .get() with defaults for robustness against missing fields
+                        # *** Changed key name and value source ***
+                        "university_student_id": university_student_id,
                         "name": student_data.get("name", "N/A"),
                         "email": student_data.get("email", "N/A"),
                         "gpa": student_data.get("gpa", 0.0) # Default GPA to 0.0 if missing
@@ -1558,11 +1560,10 @@ def get_graduating_students_from_form(decoded_token):
                     # Log if a student UID from responses doesn't have a matching student document
                     print(f"Warning: Student document not found for UID: {student_doc.id} from form {form_id} responses.")
                     # Optionally include an entry indicating the missing data:
-                    # graduating_students_details.append({"student_id": student_doc.id, "error": "Student profile not found"})
+                    # graduating_students_details.append({"university_student_id": "MISSING", "error": "Student profile not found"})
 
 
         # --- 5. Return the List (with form_id) ---
-        # *** Added form_id to the returned JSON object ***
         return jsonify({
             "form_id": form_id,
             "graduating_students": graduating_students_details
@@ -1785,7 +1786,7 @@ def get_course_priority_list(decoded_token):
     Requires admin authentication.
     Expects JSON: {"form_id": "FORM_ID", "course_id": "COURSE_ID"}
     Prioritizes graduating students first, then sorts remaining students by GPA descending.
-    Returns a sorted list of student objects (id, name, email, gpa, is_graduating).
+    Returns a sorted list of student objects (university_student_id, name, email, gpa, is_graduating).
     """
     form_id = None # Initialize for error logging
     course_id_target = None # Initialize for error logging
@@ -1821,55 +1822,49 @@ def get_course_priority_list(decoded_token):
             for student_uid, response_data in form_responses_map.items():
                 if isinstance(response_data, dict):
                     selected_courses = response_data.get('selected_courses', [])
-                    # Check if the target course is in this student's selection
-                    # Ensure comparison is case-insensitive if needed, assuming IDs are consistent case now
                     if isinstance(selected_courses, list) and course_id_target in selected_courses:
                          interested_students_raw.append({
-                             "uid": student_uid,
-                             "is_graduating": response_data.get('is_graduating') is True # Get graduating status
+                             "uid": student_uid, # Keep track of UID for fetching
+                             "is_graduating": response_data.get('is_graduating') is True
                          })
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
-             # If Form_Responses isn't a map, the list will be empty, which is handled below
 
         # --- 4. Fetch Details for Interested Students (Batch Fetch) ---
         priority_list_unsorted = []
-        if interested_students_raw: # Only fetch if there are interested students
+        if interested_students_raw:
             student_uids = [s['uid'] for s in interested_students_raw]
             student_refs = [db.collection('Students').document(uid) for uid in student_uids]
-            student_docs = db.get_all(student_refs) # Fetch student documents in batch
+            student_docs = db.get_all(student_refs)
 
-            # Create a lookup for graduating status based on the form response
-            grad_status_lookup = {s['uid']: s['is_graduating'] for s in interested_students_raw} #create a new map basically
+            grad_status_lookup = {s['uid']: s['is_graduating'] for s in interested_students_raw}
 
             for student_doc in student_docs:
                 if student_doc.exists:
                     student_data = student_doc.to_dict()
-                    uid = student_doc.id
-                    is_grad = grad_status_lookup.get(uid, False) # Get graduating status from form response
+                    uid = student_doc.id # Firebase UID
+                    is_grad = grad_status_lookup.get(uid, False)
+                    # *** Get the University Student ID from the document ***
+                    university_student_id = student_data.get("Student_ID", "N/A_ID") # Key from update_student_data
+
                     student_detail = {
-                        "student_id": uid,
+                        # *** Changed key name and value source ***
+                        "university_student_id": university_student_id,
                         "name": student_data.get("name", "N/A"),
                         "email": student_data.get("email", "N/A"),
-                        "gpa": float(student_data.get("gpa", 0.0)), # Ensure GPA is float
-                        "is_graduating": is_grad # Include the flag from the form response
+                        "gpa": float(student_data.get("gpa", 0.0)),
+                        "is_graduating": is_grad
                     }
                     priority_list_unsorted.append(student_detail)
                 else:
-                    # Log if a student UID from responses doesn't have a matching student document
                     print(f"Warning: Student document not found for UID: {student_doc.id} who selected course {course_id_target} in form {form_id}.")
-                    # Optionally include an entry indicating missing data:
-                    # priority_list_unsorted.append({"student_id": student_doc.id, "error": "Student profile not found", "is_graduating": grad_status_lookup.get(student_doc.id, False)})
-
+                    # Optionally include placeholder if needed
+                    # priority_list_unsorted.append({"university_student_id": "MISSING", "error": "Student profile not found", "is_graduating": grad_status_lookup.get(student_doc.id, False)})
 
         # --- 5. Sort the List by Priority ---
-        # Sort primarily by is_graduating (True first), then secondarily by GPA (descending)
         def sort_priority(student):
             is_grad = student.get('is_graduating', False)
             gpa = student.get('gpa', 0.0)
-            # Return a tuple: (priority_level, secondary_sort_value)
-            # Lower priority level comes first. True (graduating) maps to 0, False to 1.
-            # For secondary sort, use negative GPA to sort descending.
             return (0 if is_grad else 1, -gpa)
 
         priority_list_sorted = sorted(priority_list_unsorted, key=sort_priority)
@@ -1899,6 +1894,7 @@ def get_all_course_priority_lists(decoded_token):
     Expects JSON: {"form_id": "FORM_ID"}
     For each course, prioritizes graduating students first, then sorts remaining students by GPA descending.
     Returns a map where keys are course IDs and values are the sorted priority lists for that course.
+    Each student object in the list contains: university_student_id, name, email, gpa, is_graduating.
     """
     form_id = None # Initialize for error logging
     try:
@@ -1942,28 +1938,30 @@ def get_all_course_priority_lists(decoded_token):
                                    all_interested_uids.add(student_uid) # Add UID to set for batch fetching
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
-             # If no responses, the function will return an empty map below
 
         # --- 4. Fetch Details for All Involved Students (Batch Fetch) ---
-        student_details_lookup = {} # Store fetched details: {uid: {name:.., email:.., gpa:..}}
+        student_details_lookup = {} # Store fetched details: {uid: {name:.., email:.., gpa:.., Student_ID: ...}}
         if all_interested_uids: # Only fetch if there are students
             student_uids_list = list(all_interested_uids)
             student_refs = [db.collection('Students').document(uid) for uid in student_uids_list]
             student_docs = db.get_all(student_refs) # Fetch student documents in batch
 
             for student_doc in student_docs:
+                uid = student_doc.id # Firebase UID
                 if student_doc.exists:
                     student_data = student_doc.to_dict()
-                    student_details_lookup[student_doc.id] = {
+                    student_details_lookup[uid] = {
                         "name": student_data.get("name", "N/A"),
                         "email": student_data.get("email", "N/A"),
-                        "gpa": float(student_data.get("gpa", 0.0)) # Ensure GPA is float
+                        "gpa": float(student_data.get("gpa", 0.0)), # Ensure GPA is float
+                        # *** Fetch the University Student ID ***
+                        "Student_ID": student_data.get("Student_ID", "N/A_ID")
                     }
                 else:
-                    print(f"Warning: Student document not found for UID: {student_doc.id} referenced in form {form_id} responses.")
+                    print(f"Warning: Student document not found for UID: {uid} referenced in form {form_id} responses.")
                     # Store minimal info if profile missing
-                    student_details_lookup[student_doc.id] = {
-                         "name": "Profile Not Found", "email": "N/A", "gpa": 0.0
+                    student_details_lookup[uid] = {
+                         "name": "Profile Not Found", "email": "N/A", "gpa": 0.0, "Student_ID": "MISSING"
                     }
 
         # --- 5. Build and Sort Priority List for Each Course ---
@@ -1981,9 +1979,10 @@ def get_all_course_priority_lists(decoded_token):
             for student_info in interested_students_raw:
                  uid = student_info['uid']
                  # Combine fetched details with the graduating status from the response
-                 details = student_details_lookup.get(uid, {"name": "Error", "email": "Error", "gpa": 0.0}) # Fallback
+                 details = student_details_lookup.get(uid, {"name": "Error", "email": "Error", "gpa": 0.0, "Student_ID": "ERROR"}) # Fallback
                  priority_list_unsorted.append({
-                     "student_id": uid,
+                     # *** Changed key name and value source ***
+                     "university_student_id": details["Student_ID"],
                      "name": details["name"],
                      "email": details["email"],
                      "gpa": details["gpa"],
