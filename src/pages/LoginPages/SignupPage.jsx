@@ -17,7 +17,8 @@ const SignupPage = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [validationErrors, setValidationErrors] = useState({});
-  const { signup,logout } = useAuth();
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const { signup, logout } = useAuth();
   const navigate = useNavigate();
   const auth = getAuth();
   const googleProvider = new GoogleAuthProvider();
@@ -51,6 +52,8 @@ const SignupPage = () => {
 
     if (!confirmPassword) errors.confirmPassword = "Please confirm your password.";
     else if (password !== confirmPassword) errors.confirmPassword = "Passwords do not match.";
+
+    if (!agreedToTerms) errors.terms = "You must agree to the Terms and Conditions.";
 
     setValidationErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -89,6 +92,10 @@ const SignupPage = () => {
       console.error("Google Signup Error:", error.code, error.message);
       setError(`Failed to sign up with Google: ${error.message}`);
     }
+  };
+
+  const openTerms = () => {
+    window.open("/terms", "_blank");
   };
 
   const passwordChecks = validatePassword(password);
@@ -222,6 +229,28 @@ const SignupPage = () => {
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
               {validationErrors.confirmPassword && <p className="text-red-500 text-xs mt-1">{validationErrors.confirmPassword}</p>}
+            </div>
+
+            {/* Terms and Conditions Checkbox */}
+            <div className="flex items-start mt-4">
+              <div className="flex items-center h-5">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="w-4 h-4 border border-gray-300 rounded bg-gray-50 focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+              <div className="ml-3 text-sm">
+                <label htmlFor="terms" className="text-gray-600">
+                  I agree to the{" "}
+                  <span onClick={openTerms} className="text-blue-600 hover:underline cursor-pointer">
+                    Terms and Conditions
+                  </span>
+                </label>
+                {validationErrors.terms && <p className="text-red-500 text-xs mt-1">{validationErrors.terms}</p>}
+              </div>
             </div>
 
             <motion.button
