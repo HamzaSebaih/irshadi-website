@@ -2298,7 +2298,6 @@ def handle_extension_update():
         # Catch any other unexpected errors
         return jsonify({"error": "An unexpected error occurred: " + str(e)}), 500
 
-
 def update_student_data(uid):
     """
     Parses HTML from the request, extracts student academic info (including
@@ -2328,46 +2327,59 @@ def update_student_data(uid):
     finished_courses = [] # Initialize list for finished/equivalent/current courses
     currently_registered_courses_set = set() # Use a set for uniqueness of current courses
 
-    # Find all potential tables
-    all_tables = soup.find_all('table', class_='datadisplaytable', attrs={'border': '1', 'width': '800'})
-
+    # --- Find Specific Tables ---
     academic_table = None
     transcript_tables = []
     equivalent_courses_table = None
     current_courses_table = None # Table for currently registered courses
 
-    # --- Identify the different tables based on preceding headers ---
-    # (Logic for identifying tables remains the same as previous version)
-    for table in all_tables:
-        prev_header_elem = table.find_previous('td', class_='pldefault')
-        if prev_header_elem:
-            header_text = prev_header_elem.text.strip()
-            if 'معلومات الطالب الاكاديمية' in header_text:
-                academic_table = table
-                potential_current_table = academic_table.find_next_sibling('table', class_='datadisplaytable')
-                if potential_current_table:
-                     headers_in_next = [th.text.strip() for th in potential_current_table.find_all('th', class_='ddheader')]
-                     # Check based on the header "الجدول الدراسي" preceding the table
-                     schedule_header = potential_current_table.find_previous('td', class_='pldefault')
-                     if schedule_header and 'الجدول الدراسي' in schedule_header.text:
-                          current_courses_table = potential_current_table
-                          print("Found potential 'Currently Registered Courses' table (based on 'الجدول الدراسي' header).")
-                     elif 'المقرر' in headers_in_next: # Fallback check if header isn't perfect
-                          current_courses_table = potential_current_table
-                          print("Found potential 'Currently Registered Courses' table (based on 'المقرر' column).")
+    # Find Academic Info Table based on its specific preceding header
+    academic_header = soup.find(lambda tag: tag.name == 'td' and tag.get('class') == ['pldefault'] and 'معلومات الطالب الاكاديمية' in tag.text)
+    if academic_header:
+        # Find the next table sibling after the header's parent table
+        parent_table = academic_header.find_parent('table')
+        if parent_table:
+            academic_table = parent_table.find_next_sibling('table', class_='datadisplaytable')
+            if academic_table:
+                print("Found Academic Info table.")
 
+    # Find Current Schedule Table based on its specific preceding header
+    current_schedule_header = soup.find(lambda tag: tag.name == 'td' and tag.get('class') == ['pldefault'] and 'الجدول الدراسي' in tag.text)
+    if current_schedule_header:
+        # Find the next table sibling after the header's parent table
+        parent_table = current_schedule_header.find_parent('table')
+        if parent_table:
+             # The actual schedule table might be after a <br>, so find the next table of the correct class
+             current_courses_table = parent_table.find_next_sibling('table', class_='datadisplaytable')
+             if current_courses_table:
+                  print("Found Currently Registered Courses table.")
 
-            elif 'المقررات المعادلة' in header_text:
-                equivalent_courses_table = table
-            else:
-                 headers = [th.text.strip() for th in table.find_all('th', class_='ddheader')]
-                 if 'مسجلة' in headers and 'مجتازة' in headers and 'التقدير' in headers:
-                      transcript_tables.append(table)
+    # Find Equivalent Courses Table based on its specific preceding header
+    equivalent_header = soup.find(lambda tag: tag.name == 'td' and tag.get('class') == ['pldefault'] and 'المقررات المعادلة' in tag.text)
+    if equivalent_header:
+        parent_table = equivalent_header.find_parent('table')
+        if parent_table:
+            equivalent_courses_table = parent_table.find_next_sibling('table', class_='datadisplaytable')
+            if equivalent_courses_table:
+                print("Found Equivalent Courses table.")
+
+    # Find Transcript Tables (based on headers within the table)
+    all_data_tables = soup.find_all('table', class_='datadisplaytable')
+    for table in all_data_tables:
+        # Avoid re-processing tables we already identified
+        if table == academic_table or table == current_courses_table or table == equivalent_courses_table:
+            continue
+        headers = [th.text.strip() for th in table.find_all('th', class_='ddheader')]
+        if 'مسجلة' in headers and 'مجتازة' in headers and 'التقدير' in headers:
+            # Check if it's preceded by a semester header like "الفصل الدراسي"
+            semester_header = table.find_previous('td', class_='dddefault')
+            if semester_header and semester_header.find('font', color='FF0000'): # Look for red font semester header
+                 transcript_tables.append(table)
+                 # print("Found a Transcript table.") # Less verbose
 
     # --- 1. Process Academic Info Table ---
-    # (Logic remains the same as previous version)
     if academic_table:
-        print("Academic table found, extracting rows...")
+        # print("Processing Academic Info table...") # Less verbose
         rows = academic_table.find_all('tr')
         for row in rows:
             ths = row.find_all('th', class_='ddheader')
@@ -2389,9 +2401,8 @@ def update_student_data(uid):
 
 
     # --- 2. Process Transcript Tables (Finished Courses) ---
-    # (Logic remains the same as previous version)
     for table in transcript_tables:
-        print("Found transcript table, extracting finished courses...")
+        # print("Processing Transcript table...") # Less verbose
         rows = table.find_all('tr')[1:]
         for row in rows:
             cols = row.find_all('td', class_='dddefault')
@@ -2410,9 +2421,8 @@ def update_student_data(uid):
                                finished_courses.append(course_code)
 
     # --- 3. Process Equivalent Courses Table ---
-    # (Logic remains the same as previous version)
     if equivalent_courses_table:
-        print("Found equivalent courses table, extracting courses...")
+        # print("Processing Equivalent Courses table...") # Less verbose
         rows = equivalent_courses_table.find_all('tr')[1:]
         for row in rows:
             cols = row.find_all('td', class_='dddefault')
@@ -2424,35 +2434,31 @@ def update_student_data(uid):
                      if course_code not in finished_courses:
                           finished_courses.append(course_code)
 
-    # --- 4. Process Currently Registered Courses Table (CORRECTED LOGIC) ---
+    # --- 4. Process Currently Registered Courses Table (Corrected Logic) ---
     if current_courses_table:
         print("Processing 'Currently Registered Courses' table...")
         headers = [th.text.strip() for th in current_courses_table.find_all('th', class_='ddheader')]
         try:
-            # Find the index of the 'المقرر' column
             course_col_index = headers.index('المقرر')
-            rows = current_courses_table.find_all('tr')[1:] # Skip header row
+            rows = current_courses_table.find_all('tr')[1:]
             for row in rows:
                 cols = row.find_all('td', class_='dddefault')
                 if len(cols) > course_col_index:
-                    # *** Directly use the text from the column ***
                     course_code = cols[course_col_index].text.strip()
-                    # *** Basic validation: Check if it contains a hyphen and isn't empty ***
-                    if course_code and '-' in course_code:
-                        currently_registered_courses_set.add(course_code) # Add to set for uniqueness
+                    if course_code and '-' in course_code: # Basic validation
+                        currently_registered_courses_set.add(course_code)
                     else:
                         print(f"Warning: Skipping potential course code '{course_code}' from current schedule table (unexpected format).")
         except ValueError:
              print("Warning: Could not find 'المقرر' column header in the current courses table.")
         except Exception as e:
              print(f"Error processing current courses table: {e}")
-             traceback.print_exc() # Print full traceback for debugging
+             traceback.print_exc()
     else:
         print("Warning: 'Currently Registered Courses' table not found or identified.")
     # --- End Corrected Logic ---
 
     # --- Combine finished, equivalent, and current courses ---
-    # Add unique current courses to the finished list
     for course_code in currently_registered_courses_set:
         if course_code not in finished_courses:
             finished_courses.append(course_code)
@@ -2492,7 +2498,7 @@ def update_student_data(uid):
     student_document.set(updated_data, merge=True) # Use merge=True to be safe
 
     print(f"Finished Courses (including current): {len(finished_courses)}")
-    print("Updated Firestore document with data:", {k: v for k, v in updated_data.items() if k != 'Finished_Courses'}, f"Finished_Courses count: {len(updated_data['Finished_Courses'])}") # Avoid printing long list
+    print("Updated Firestore document with data:", {k: v for k, v in updated_data.items() if k != 'Finished_Courses'}, f"Finished_Courses count: {len(updated_data['Finished_Courses'])}")
 
 @app.route('/getMyForms', methods=['GET'])
 @token_required # Ensures only logged-in users (students/admins) can call this
