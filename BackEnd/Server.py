@@ -1491,7 +1491,6 @@ def delete_course_completely(decoded_token):
         # Return a generic server error message
         return jsonify({"error": "Failed to delete course due to an internal server error", "details": str(e)}), 500
 
-
 @app.route('/getGraduatingStudents', methods=['POST'])
 @admin_required # Only admins should access this list
 def get_graduating_students_from_form(decoded_token):
