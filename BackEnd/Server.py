@@ -2247,7 +2247,6 @@ def generate_section_schedule(decoded_token):
         traceback.print_exc()
         return jsonify({"error": "Failed to generate section schedule due to an internal server error", "details": str(e)}), 500
 
-
 #End of Admin Functions Section _______________
 
 #Students Functions Section _______________
@@ -2796,7 +2795,6 @@ def get_form_courses(decoded_token):
         print(f"Error in /getFormCourses for form {form_id_local}, user {uid_local}: {e}")
         traceback.print_exc() # Print detailed traceback for debugging
         return jsonify({"error": "Failed to retrieve form courses due to an internal server error", "details": str(e)}), 500
-
 
 @app.route('/addFormResponse', methods=['POST'])
 @token_required # Student needs to be logged in
