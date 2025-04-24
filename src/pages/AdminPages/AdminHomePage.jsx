@@ -871,7 +871,7 @@ const AdminHomePage = () => {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button onClick={getAllCoursePriorityLists} className="inline-flex justify-center rounded-md border border-transparent bg-secondary px-4 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-secondary-dark focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
-                All Courses Priority
+                Courses Priority
               </button>
 
               {/*
@@ -887,8 +887,8 @@ const AdminHomePage = () => {
                 Graduating Students
               </button>
 
-              <button onClick={() => setIsPopUpForAiClicked(true)} className="sm:col-span-2 inline-flex justify-center rounded-md border border-transparent bg-primary px-4 py-3 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
-                Generate Section Schedule (AI)
+              <button onClick={() => setIsPopUpForAiClicked(true)} className="inline-flex justify-center rounded-md border border-transparent bg-secondary px-4 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-secondary-dark focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
+                Schedule (AI)
               </button>
             </div>
 
