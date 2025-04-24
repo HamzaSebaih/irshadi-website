@@ -1512,7 +1512,7 @@ def get_graduating_students_from_form(decoded_token):
 
         # Validate form_id
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
-            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 409
         form_id = form_id.strip()
         # --- End form_id retrieval ---
 
@@ -1697,7 +1697,7 @@ def get_form_course_stats(decoded_token):
 
         # Validate form_id
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
-            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 409
         form_id = form_id.strip()
         # --- End form_id retrieval ---
 
@@ -1800,7 +1800,7 @@ def get_course_priority_list(decoded_token):
 
         # Validate inputs
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
-            return jsonify({"error": "Missing or invalid 'form_id'"}), 400
+            return jsonify({"error": "Missing or invalid 'form_id'"}), 409
         if not course_id_target or not isinstance(course_id_target, str) or not course_id_target.strip():
             return jsonify({"error": "Missing or invalid 'course_id'"}), 400
         form_id = form_id.strip()
@@ -1906,7 +1906,7 @@ def get_all_course_priority_lists(decoded_token):
 
         # Validate form_id
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
-            return jsonify({"error": "Missing or invalid 'form_id'"}), 400
+            return jsonify({"error": "Missing or invalid 'form_id'"}), 409
         form_id = form_id.strip()
         # --- End input retrieval ---
 
@@ -2035,7 +2035,7 @@ def generate_section_schedule(decoded_token):
 
         # Validate inputs
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
-            return jsonify({"error": "Missing or invalid 'form_id'"}), 400
+            return jsonify({"error": "Missing or invalid 'form_id'"}), 409
         if not isinstance(section_capacity, int) or section_capacity <= 0:
              return jsonify({"error": "'section_capacity' must be a positive integer"}), 400
         valid_preferences = ["MorningAndAfternoonFocus", "AfternoonAndEveningFocus"]
