@@ -2501,63 +2501,71 @@ def update_student_data(uid):
 @token_required # Ensures only logged-in users (students/admins) can call this
 def get_my_forms(decoded_token): # token_required provides decoded_token
     """
-    Retrieves a list of forms relevant to the calling student's major.
+    Retrieves a list of forms relevant to the calling student's major AND
+    that have already started (current time >= start_date).
     Requires user authentication.
-    Filters forms based on matching the student's 'major' field with the form's 'plan_id'.
+    Filters forms based on matching the student's 'major' field with the form's 'plan_id'
+    and checking the form's start_date.
     Returns a JSON list containing each matching form's ID and its data,
     EXCLUDING the 'Form_Responses' field.
     """
+    uid = None # Initialize for error logging
     try:
         # --- 1. Get Student's UID and Major ---
         uid = decoded_token.get('uid')
         if not uid:
-             # This shouldn't happen if token_required works correctly, but good practice
              return jsonify({"error": "UID not found in token"}), 400
 
         # Fetch the student's document
-        # NOTE: Assuming 'Students' is the correct collection name
         student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
 
         if not student_doc.exists:
-             # Handle case where user exists in Auth but not in Students collection
-             # Or if an admin tries to call this endpoint
              return jsonify({"error": "Student profile not found"}), 404
 
         student_data = student_doc.to_dict()
-        # Get the student's major (assuming it's stored in English, e.g., "IT")
         student_major = student_data.get('major')
 
         if not student_major:
-             # Handle case where student exists but has no major assigned
              print(f"Warning: Student {uid} has no major assigned.")
-             # Return empty list as no forms can match
-             return jsonify({"forms": []}), 200
+             return jsonify({"forms": []}), 200 # Return empty list if no major
 
         # --- 2. Query All Forms ---
         forms_ref = db.collection('Forms')
         forms_stream = forms_ref.stream()
+        current_time_utc = datetime.now(timezone.utc) # Get current time once
 
-        # --- 3. Filter Forms by Major and Format Data ---
+        # --- 3. Filter Forms by Major, Start Date and Format Data ---
         relevant_forms_list = []
         for doc in forms_stream:
             form_id = doc.id
             form_data = doc.to_dict()
 
-            # Get the plan_id associated with the form
             form_plan_id = form_data.get('plan_id')
+            form_start_date = form_data.get('start_date') # Timestamp from Firestore
 
-            # --- Check if the form's plan_id matches the student's major ---
+            # --- Check 1: Major Match ---
             if form_plan_id == student_major:
-                # If it matches, exclude responses and add to the list
-                form_data.pop('Form_Responses', None) # Exclude responses
 
-                form_entry = {
-                    "form_id": form_id,
-                    **form_data # Unpack the rest of the form data
-                }
-                relevant_forms_list.append(form_entry)
-            # --- End of check ---
+                # --- Check 2: Form Started ---
+                # Ensure form_start_date is a valid datetime object
+                if isinstance(form_start_date, datetime):
+                    # Make sure comparison is timezone-aware (Firestore Timestamps usually are UTC)
+                    form_start_date_utc = form_start_date.replace(tzinfo=timezone.utc) if form_start_date.tzinfo is None else form_start_date
+
+                    if current_time_utc >= form_start_date_utc:
+                        # If major matches AND form has started, add it
+                        form_data.pop('Form_Responses', None) # Exclude responses
+                        form_entry = {
+                            "form_id": form_id,
+                            **form_data # Unpack the rest of the form data
+                        }
+                        relevant_forms_list.append(form_entry)
+                    # else: Form hasn't started yet, skip
+                else:
+                    # Log forms with invalid start dates but don't crash
+                    print(f"Warning: Form {form_id} has invalid or missing 'start_date'. Skipping.")
+            # --- End Checks ---
 
         # --- 4. Return the Response ---
         # Return the filtered list of forms
@@ -2565,8 +2573,9 @@ def get_my_forms(decoded_token): # token_required provides decoded_token
 
     except Exception as e:
         # Log the error for server-side debugging
-        uid_local = decoded_token.get('uid', 'unknown') # Get uid for logging if available
+        uid_local = uid if 'uid' in locals() and uid else 'unknown'
         print(f"Error in /getMyForms for user {uid_local}: {e}")
+        traceback.print_exc()
         # Return a generic server error message
         return jsonify({"error": "Failed to retrieve student forms due to an internal server error", "details": str(e)}), 500
 
