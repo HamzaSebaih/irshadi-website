@@ -11,8 +11,6 @@ const ShowReport = () => {
     const [reportJson, setReportJson] = useState(null);
     // State for storing the type of report to display
     const [typeOfReport, setTypeOfReport] = useState(null);
-    // State to manage loading status
-    const [isLoading, setIsLoading] = useState(true);
     // State to store the search term for report type 1
     const [searchTerm1, setSearchTerm1] = useState("");
     // State to store the search term for report type 2
@@ -30,8 +28,6 @@ const ShowReport = () => {
             // Set the state with the received data
             setReportJson(location.state.reportJson);
             setTypeOfReport(location.state.typeOfReport);
-            // Mark loading as complete
-            setIsLoading(false);
         } else {
             // Log a warning and redirect if data is missing
             console.warn("Report data or type missing in location state, redirecting...");
@@ -61,14 +57,6 @@ const ShowReport = () => {
     };
 
 
-    // Display a loading message while data is being fetched or processed
-    if (isLoading) {
-        return (
-            <div className="p-6 text-center bg-primary-dark text-white">
-                Loading report data...
-            </div>
-        );
-    }
 
     // ---- Report Type 1: All Course Priority Lists ----
     if (typeOfReport === 1) {
@@ -128,15 +116,15 @@ const ShowReport = () => {
                                     // Table container for responsiveness
                                     <div className="overflow-x-auto">
                                         {/* Student Table */}
-                                        <table className="min-w-full divide-y divide-[rgba(255,255,255,0.2)] border border-[rgba(255,255,255,0.2)]">
+                                        <table className="min-w-full divide-y border">
                                             {/* Table Header */}
                                             <thead className="bg-primary-light">
                                                 <tr>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider border-r">Name</th>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider border-r">University ID</th>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider border-r">Email</th>
-                                                    <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider border-r">GPA</th>
-                                                    <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Graduating</th>
+                                                    <th scope="col" className="w-3/12 px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider border-r">Name</th>    
+                                                    <th scope="col" className="w-3/12 px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider border-r">University ID</th>  
+                                                    <th scope="col" className="w-3/12 px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider border-r">Email</th>        
+                                                    <th scope="col" className="w-1/12 px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider border-r">GPA</th>          
+                                                    <th scope="col" className="w-1/12 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Graduating</th>  
                                                 </tr>
                                             </thead>
                                             {/* Table Body */}
@@ -311,7 +299,7 @@ const ShowReport = () => {
                 </div>
 
                 {/* Card container - Only render if there are results */}
-                 {filteredGraduatingStudents.length > 0 ? (
+                {filteredGraduatingStudents.length > 0 ? (
                     <div className="border border-primary-dark rounded-lg shadow-sm bg-gray-100 overflow-hidden">
                         {/* Card Header */}
                         <div className="p-4 bg-primary-dark">
@@ -351,12 +339,12 @@ const ShowReport = () => {
                             </div>
                         </div>
                     </div>
-                 ) : (
+                ) : (
                     // Message if search yields no results for section 3
                     <div className="text-center p-4 text-gray-600 bg-gray-100 rounded-lg border border-gray-300">
                         No graduating students found matching "{searchTerm3}".
                     </div>
-                 )}
+                )}
             </div>
         );
     }
@@ -393,7 +381,7 @@ const ShowReport = () => {
                 </h1>
 
                 {/* Display Schedule Preference */}
-                 <div className="p-4 bg-gray-200 rounded-lg shadow mb-6">
+                <div className="p-4 bg-gray-200 rounded-lg shadow mb-6">
                     <p className="text-center text-gray-800">
                         <span className="font-semibold">Schedule Preference:</span> {schedulePreference.replace(/([A-Z])/g, ' $1').trim()} {/* Add space before capitals */}
                     </p>
