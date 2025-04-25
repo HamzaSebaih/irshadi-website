@@ -2502,10 +2502,10 @@ def update_student_data(uid):
 def get_my_forms(decoded_token): # token_required provides decoded_token
     """
     Retrieves a list of forms relevant to the calling student's major AND
-    that have already started (current time >= start_date).
+    that are currently active (current time >= start_date AND current time < end_date).
     Requires user authentication.
     Filters forms based on matching the student's 'major' field with the form's 'plan_id'
-    and checking the form's start_date.
+    and checking the form's start_date and end_date.
     Returns a JSON list containing each matching form's ID and its data,
     EXCLUDING the 'Form_Responses' field.
     """
@@ -2535,7 +2535,7 @@ def get_my_forms(decoded_token): # token_required provides decoded_token
         forms_stream = forms_ref.stream()
         current_time_utc = datetime.now(timezone.utc) # Get current time once
 
-        # --- 3. Filter Forms by Major, Start Date and Format Data ---
+        # --- 3. Filter Forms by Major, Start Date, End Date and Format Data ---
         relevant_forms_list = []
         for doc in forms_stream:
             form_id = doc.id
@@ -2543,28 +2543,32 @@ def get_my_forms(decoded_token): # token_required provides decoded_token
 
             form_plan_id = form_data.get('plan_id')
             form_start_date = form_data.get('start_date') # Timestamp from Firestore
+            form_end_date = form_data.get('end_date')     # Timestamp from Firestore
 
             # --- Check 1: Major Match ---
             if form_plan_id == student_major:
 
-                # --- Check 2: Form Started ---
-                # Ensure form_start_date is a valid datetime object
-                if isinstance(form_start_date, datetime):
+                # --- Check 2 & 3: Form is Active (Started AND Not Ended) ---
+                # Ensure form dates are valid datetime objects
+                if isinstance(form_start_date, datetime) and isinstance(form_end_date, datetime):
                     # Make sure comparison is timezone-aware (Firestore Timestamps usually are UTC)
                     form_start_date_utc = form_start_date.replace(tzinfo=timezone.utc) if form_start_date.tzinfo is None else form_start_date
+                    form_end_date_utc = form_end_date.replace(tzinfo=timezone.utc) if form_end_date.tzinfo is None else form_end_date
 
-                    if current_time_utc >= form_start_date_utc:
-                        # If major matches AND form has started, add it
+                    # Check if current time is within the start and end dates
+                    # (Inclusive of start date, exclusive of end date - adjust if needed)
+                    if current_time_utc >= form_start_date_utc and current_time_utc < form_end_date_utc:
+                        # If major matches AND form is active, add it
                         form_data.pop('Form_Responses', None) # Exclude responses
                         form_entry = {
                             "form_id": form_id,
                             **form_data # Unpack the rest of the form data
                         }
                         relevant_forms_list.append(form_entry)
-                    # else: Form hasn't started yet, skip
+                    # else: Form hasn't started or has already ended, skip
                 else:
-                    # Log forms with invalid start dates but don't crash
-                    print(f"Warning: Form {form_id} has invalid or missing 'start_date'. Skipping.")
+                    # Log forms with invalid dates but don't crash
+                    print(f"Warning: Form {form_id} has invalid or missing 'start_date' or 'end_date'. Skipping.")
             # --- End Checks ---
 
         # --- 4. Return the Response ---
