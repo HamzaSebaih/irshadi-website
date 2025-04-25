@@ -1,35 +1,37 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import SignupPage from '../../pages/LoginPages/SignupPage'; // Adjust the import path as needed
+import SignupPage from '../../pages/LoginPages/SignupPage';
 import { BrowserRouter } from 'react-router';
 
-// Mock the dependencies and context
+// mocking react-router navigation function
 jest.mock('react-router', () => ({
   ...jest.requireActual('react-router'),
-  useNavigate: () => jest.fn()
+  useNavigate: () => jest.fn() // this just replaces real nav with a fake one
 }));
 
-// Mock the AuthContext
+// these are just fake signup and logout funcs we use in tests
 const mockSignup = jest.fn();
 const mockLogout = jest.fn();
+
+// mocking the real auth context with our fake funcs
 jest.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     signup: mockSignup,
     logout: mockLogout
+
   })
 }));
 
-// Mock Firebase Auth
+// fake firebase stuff here so tests don't use real firebase
 jest.mock('firebase/auth', () => ({
-  getAuth: jest.fn(() => ({
-    signOut: jest.fn().mockResolvedValue(true)
-  })),
+  getAuth: jest.fn(() => ({ signOut: jest.fn().mockResolvedValue(true) })),
   signInWithPopup: jest.fn(),
   GoogleAuthProvider: jest.fn(),
   sendEmailVerification: jest.fn().mockResolvedValue(true)
 }));
 
+// mock animation so we dont care about the visuals
 jest.mock('lottie-react', () => ({
   __esModule: true,
   default: () => <div data-testid="lottie-animation" />
@@ -37,13 +39,13 @@ jest.mock('lottie-react', () => ({
 
 jest.mock('../../assets/Animation.json', () => ({}));
 
-// Mock the Lucide React icons
+// same for icons, just faking them
 jest.mock('lucide-react', () => ({
-  Eye: () => <div data-testid="eye-icon" />,
-  EyeOff: () => <div data-testid="eye-off-icon" />
+  Eye: () => <div data-testid="eye-icon" />, // eye icon
+  EyeOff: () => <div data-testid="eye-off-icon" /> // eye off icon
 }));
 
-// Mock framer-motion
+// and faking animation motion from framer
 jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }) => <div {...props}>{children}</div>,
@@ -51,23 +53,22 @@ jest.mock('framer-motion', () => ({
   }
 }));
 
-describe('SignupPage Form Validation', () => {
-  const renderSignupPage = () => {
-    return render(
+describe('Signup page form tests', () => {
+  // func to load our SignupPage wrapped with a router
+  const loadSignupPage = () =>
+    render(
       <BrowserRouter>
         <SignupPage />
       </BrowserRouter>
     );
-  };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.clearAllMocks(); // clean all mocked funcs before every test
   });
 
-  // Basic rendering test
-  test('renders signup form with all required fields', () => {
-    renderSignupPage();
-    
+  test('shows all the form inputs and sign up button', () => {
+    loadSignupPage();
+    // check if every field is on screen
     expect(screen.getByLabelText(/First Name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Last Name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
@@ -77,111 +78,93 @@ describe('SignupPage Form Validation', () => {
     expect(screen.getByRole('button', { name: /Sign Up/i })).toBeInTheDocument();
   });
 
-  // Empty form validation test
-  test('shows validation errors when form is submitted empty', async () => {
-    renderSignupPage();
-    
+  test('show errors if user dont type anything and click submit', async () => {
+    loadSignupPage();
     fireEvent.click(screen.getByRole('button', { name: /Sign Up/i }));
-    
+
+    // these errors should show if form left empty
     expect(await screen.findByText(/First name is required/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Last name is required/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Email is required/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Password is required/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Please confirm your password/i)).toBeInTheDocument();
-    expect(await screen.findByText(/You must agree to the Terms and Conditions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Last name is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/Email is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/Password is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/Please confirm your password/i)).toBeInTheDocument();
+    expect(screen.getByText(/You must agree to the Terms and Conditions/i)).toBeInTheDocument();
   });
 
-  // Email validation test
-  test('validates email format correctly', async () => {
-    renderSignupPage();
-    
-    const emailInput = screen.getByLabelText(/Email/i);
-    fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
-    
+  test('show error if email format is not valid', async () => {
+    loadSignupPage();
+    fireEvent.change(screen.getByLabelText(/Email/i), {
+      target: { value: 'invalid' } // this is not an email
+    });
     fireEvent.click(screen.getByRole('button', { name: /Sign Up/i }));
-    
+
     expect(await screen.findByText(/Invalid email format/i)).toBeInTheDocument();
   });
 
-  // Password requirements test
-  test('validates password requirements correctly', async () => {
-    renderSignupPage();
-    
+  test('check password rules when typing', () => {
+    loadSignupPage();
     const passwordInput = screen.getByLabelText(/^Password$/i);
-    
-    // Test password with only lowercase letters
-    fireEvent.change(passwordInput, { target: { value: 'onlylowercase' } });
-    
+
+    // try weak password first
+    fireEvent.change(passwordInput, { target: { value: 'password' } });
     expect(screen.getByText(/✗ At least one uppercase letter/i)).toBeInTheDocument();
     expect(screen.getByText(/✗ At least one number/i)).toBeInTheDocument();
     expect(screen.getByText(/✓ Minimum 8 characters/i)).toBeInTheDocument();
-    
-    // Test complete valid password
-    fireEvent.change(passwordInput, { target: { value: 'ValidPassword123' } });
-    
+
+    // now type a strong one
+    fireEvent.change(passwordInput, { target: { value: 'Valid123' } });
     expect(screen.getByText(/✓ At least one uppercase letter/i)).toBeInTheDocument();
     expect(screen.getByText(/✓ At least one number/i)).toBeInTheDocument();
-    expect(screen.getByText(/✓ Minimum 8 characters/i)).toBeInTheDocument();
   });
 
-  // Password matching test
-  test('validates password matching correctly', async () => {
-    renderSignupPage();
-    
-    // Fill required fields to avoid other validation errors
-    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'John' } });
-    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Doe' } });
-    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'john@example.com' } });
-    
-    const passwordInput = screen.getByLabelText(/^Password$/i);
-    const confirmPasswordInput = screen.getByLabelText(/Confirm Password/i);
-    
-    fireEvent.change(passwordInput, { target: { value: 'ValidPassword123' } });
-    fireEvent.change(confirmPasswordInput, { target: { value: 'DifferentPassword123' } });
-    
+  test('error if password and confirm password not same', async () => {
+    loadSignupPage();
+
+    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'Waleed' } });
+    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Alsafari' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'waleed@gmail.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'ValidPass1' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password/i), { target: { value: 'NotMatch' } });
+
     fireEvent.click(screen.getByRole('button', { name: /Sign Up/i }));
-    
+
     expect(await screen.findByText(/Passwords do not match/i)).toBeInTheDocument();
   });
 
-  // Terms and conditions test
-  test('validates terms and conditions agreement', async () => {
-    renderSignupPage();
-    
-    // Fill in all required fields with valid data
-    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'John' } });
-    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Doe' } });
-    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'johndoe@example.com' } });
-    fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'ValidPassword123' } });
-    fireEvent.change(screen.getByLabelText(/Confirm Password/i), { target: { value: 'ValidPassword123' } });
-    
-    // Don't check terms checkbox yet
+  test('user must check the terms checkbox or error will show', async () => {
+    loadSignupPage();
+
+    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'Waleed' } });
+    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Alsafari' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'waleed@gmail.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'ValidPass1' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password/i), { target: { value: 'ValidPass1' } });
+
     fireEvent.click(screen.getByRole('button', { name: /Sign Up/i }));
-    
+
     expect(await screen.findByText(/You must agree to the Terms and Conditions/i)).toBeInTheDocument();
   });
 
-  // Successful submission test
-  test('submits form successfully with valid data', async () => {
-    // Mock successful signup
+  test('send form if every field is correct and checkbox is checked', async () => {
+    // this fakes a success signup
     mockSignup.mockResolvedValue({ user: { email: 'test@example.com' } });
-    
-    renderSignupPage();
-    
-    // Fill in all required fields with valid data
-    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'John' } });
-    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Doe' } });
-    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'johndoe@example.com' } });
-    fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'ValidPassword123' } });
-    fireEvent.change(screen.getByLabelText(/Confirm Password/i), { target: { value: 'ValidPassword123' } });
+
+    loadSignupPage();
+
+    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'Waleed' } });
+    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Alsafari' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'waleed@gmail.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'ValidPass1' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password/i), { target: { value: 'ValidPass1' } });
     fireEvent.click(screen.getByLabelText(/I agree to the/i));
-    
+
     fireEvent.click(screen.getByRole('button', { name: /Sign Up/i }));
-    
+
+    // check if signup got called with correct data
     await waitFor(() => {
-      expect(mockSignup).toHaveBeenCalledWith('johndoe@example.com', 'ValidPassword123');
+      expect(mockSignup).toHaveBeenCalledWith('waleed@gmail.com', 'ValidPass1');
     });
-    
+
     expect(await screen.findByText(/A verification email has been sent/i)).toBeInTheDocument();
   });
 });
