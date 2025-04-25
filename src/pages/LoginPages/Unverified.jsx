@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'; // Import useState
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useAuth } from "../../contexts/AuthContext";
 import { ArrowLeft } from 'lucide-react';
 import { sendEmailVerification } from "firebase/auth";

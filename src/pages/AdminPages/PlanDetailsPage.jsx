@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import ShowCoursesPopUp from '../../components/ShowCoursesPopUp';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';

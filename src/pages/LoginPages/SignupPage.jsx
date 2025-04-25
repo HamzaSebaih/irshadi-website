@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router";
 import { getAuth, signInWithPopup, GoogleAuthProvider, sendEmailVerification } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
@@ -65,7 +65,7 @@ const SignupPage = () => {
       await logout();
       console.log("Email/Password Signup Successful, Verification Email Sent");
       setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
-      
+
       setTimeout(() => {
         navigate("/LoginPage");
       }, 3000);
@@ -151,8 +151,9 @@ const SignupPage = () => {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* First Name */}
             <div>
-              <label className="block text-sm text-gray-600">First Name</label>
+              <label htmlFor="firstName" className="block text-sm text-gray-600">First Name</label>
               <input
+                id="firstName"
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
@@ -163,8 +164,9 @@ const SignupPage = () => {
 
             {/* Last Name */}
             <div>
-              <label className="block text-sm text-gray-600">Last Name</label>
+              <label htmlFor="lastName" className="block text-sm text-gray-600">Last Name</label>
               <input
+                id="lastName"
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
@@ -175,8 +177,9 @@ const SignupPage = () => {
 
             {/* Email */}
             <div>
-              <label className="block text-sm text-gray-600">Email</label>
+              <label htmlFor="email" className="block text-sm text-gray-600">Email</label>
               <input
+                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -187,8 +190,9 @@ const SignupPage = () => {
 
             {/* Password */}
             <div className="relative">
-              <label className="block text-sm text-gray-600">Password</label>
+              <label htmlFor="password" className="block text-sm text-gray-600">Password</label>
               <input
+                id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -221,8 +225,9 @@ const SignupPage = () => {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm text-gray-600">Confirm Password</label>
+              <label htmlFor="confirmPassword" className="block text-sm text-gray-600">Confirm Password</label>
               <input
+                id="confirmPassword"
                 type={showPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -230,7 +235,6 @@ const SignupPage = () => {
               />
               {validationErrors.confirmPassword && <p className="text-red-500 text-xs mt-1">{validationErrors.confirmPassword}</p>}
             </div>
-
             {/* Terms and Conditions Checkbox */}
             <div className="flex items-start mt-4">
               <div className="flex items-center h-5">

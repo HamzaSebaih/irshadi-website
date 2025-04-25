@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 const AdminStudyPlansPage = () => {
   const backendIp = "http://127.0.0.1:5000"; //this the ip domain for the backend
