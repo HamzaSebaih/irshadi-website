@@ -1,4 +1,4 @@
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router";
 import { useAuth } from '../contexts/AuthContext';
 import LogoutButton from "./LogoutButton";
 import { useExtraInfo } from "../contexts/BackEndContext";
