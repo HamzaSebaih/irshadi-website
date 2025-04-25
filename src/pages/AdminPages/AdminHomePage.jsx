@@ -1,6 +1,5 @@
 import { useEffect, useState,useMemo } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import ShowReport from "./ShowReport"; 
 import {useNavigate } from 'react-router-dom';
 
 const AdminHomePage = () => {
@@ -24,9 +23,7 @@ const AdminHomePage = () => {
   const [isPopUpForReportsClicked, setIsPopUpForReportsClicked] = useState(false) 
   const [formThatWantToBeEdited, setFormThatWantToBeEdited] = useState(null) 
   const [formThatWantToPrintReport, setFormThatWantToPrintReport] = useState(null) 
-  const [isPopUpForSpecificCourseClicked, setIsPopUpForSpecificCourseClicked] = useState(false) 
   const [isPopUpForAiClicked, setIsPopUpForAiClicked] = useState(false) 
-  const [specificCourse, setSpecificCourse] = useState(null) 
   const [sectionCapacity, setSectionCapacity] = useState("") 
   const [timePreference, setTimePreference] = useState("") 
   const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
@@ -222,16 +219,6 @@ const AdminHomePage = () => {
     }
   };
 
-  const getAllCoursesInPlan = (formData) => {
-    if (!formData || !plans) return [];
-    const plan_id = formData.plan_id;
-    const plan = plans.find(p => p.plan_id === plan_id);
-    if (plan && plan.levels) {
-      return Object.values(plan.levels).flat();
-    } else {
-      return [];
-    }
-  }
 
   const getAllCoursePriorityLists = async () => {
     try {
@@ -257,40 +244,6 @@ const AdminHomePage = () => {
       setIsPopUpForReportsClicked(false)
     } catch (error) {
       console.error("Error in Reports (All Courses):", error);
-      alert(error)
-    }
-  }
-
-  const getCoursePriorityList = async () => {
-    if (!specificCourse) {
-      alert("Please select a specific course first.");
-      return;
-    }
-    try {
-      const token = await user.getIdToken();
-      const response = await fetch(`${backendIp}/getCoursePriorityList`, {
-        method: "POST",
-        headers: {
-          Authorization: `${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ form_id: formThatWantToPrintReport.form_id, course_id: specificCourse }),
-      });
-      if (!response.ok) {
-        if (response.status === 409) {
-          throw new Error("Missing or invalid form")
-        }
-        else {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-      }
-      const data = await response.json();
-      console.log(`Specific Course (${specificCourse}) Priority List Report:`, data);
-      alert(`Report for ${specificCourse} generated! Check console.`);
-      setIsPopUpForSpecificCourseClicked(false)
-      setIsPopUpForReportsClicked(false)
-    } catch (error) {
-      console.error("Error in Reports (Specific Course):", error);
       alert(error)
     }
   }
@@ -394,13 +347,12 @@ const AdminHomePage = () => {
           throw new Error("Missing or invalid form")
         }
         else {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+          throw new Error(`Error Generating Schedule ${response.status}`);
         }
 
       }
       const data = await response.json();
-      console.log("AI Schedule Data:", data)
-      alert("AI schedule generated successfully! Check console.");
+      navigate('/ShowReport', { state: {reportJson: data ,typeOfReport:4} }); //typeOfReport stand for this report type
       setIsPopUpForAiClicked(false)
       setIsPopUpForReportsClicked(false)
     } catch (error) {
@@ -874,12 +826,6 @@ const AdminHomePage = () => {
                 Courses Priority
               </button>
 
-              {/*
-                        <button onClick={() => setIsPopUpForSpecificCourseClicked(true)} className="inline-flex justify-center rounded-md border border-transparent bg-secondary px-4 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-secondary-dark focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"> 
-                            Specific Course Priority
-                        </button>
-                */}
-
               <button onClick={getFormCourseStats} className="inline-flex justify-center rounded-md border border-transparent bg-secondary px-4 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-secondary-dark focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
                 Courses Stats
               </button>
@@ -892,7 +838,7 @@ const AdminHomePage = () => {
               </button>
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-center">
               <button type="button" onClick={() => setIsPopUpForReportsClicked(false)} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
                 Close
               </button>
@@ -900,51 +846,6 @@ const AdminHomePage = () => {
           </div>
         </div>
       )}
-
-      {/*
-         {isPopUpForSpecificCourseClicked && formThatWantToPrintReport && ( 
-             
-             <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-                onClick={() => setIsPopUpForSpecificCourseClicked(false)} 
-             >
-                
-                 <div
-                    className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
-                    onClick={(e) => e.stopPropagation()} 
-                >
-                    <h2 className="mb-4 text-xl font-semibold text-gray-800">Select Course for Report</h2>
-
-                      
-                     <div className="mt-2 max-h-60 space-y-2 overflow-y-auto">
-                         
-                        {getAllCoursesInPlan(formThatWantToPrintReport).length > 0 ? ( 
-                            getAllCoursesInPlan(formThatWantToPrintReport).map((courseCode) => ( 
-                            
-                            <button
-                                key={courseCode} 
-                                onClick={() => { 
-                                    setSpecificCourse(courseCode) 
-                                    getCoursePriorityList() 
-                                }}
-                                className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary"
-                            >
-                                {courseCode}
-                            </button>
-                            ))
-                        ) : (
-                             <p className="text-center text-sm text-gray-500">No courses found for this form's plan.</p>
-                        )}
-                    </div>
-                    <div className="mt-6 flex justify-end">
-                         <button type="button" onClick={() => setIsPopUpForSpecificCourseClicked(false)} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-             </div>
-        )}
-             */}
 
       {/* AI Options Modal - Controlled by isPopUpForAiClicked */}
       {isPopUpForAiClicked && formThatWantToPrintReport && ( //
@@ -973,7 +874,7 @@ const AdminHomePage = () => {
                 } // Original setter
                 }
                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-                placeholder="Default capacity if empty"
+                placeholder="Default value 25 "
                 min="1"
               />
             </div>

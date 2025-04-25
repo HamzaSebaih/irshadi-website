@@ -54,24 +54,11 @@ const FillFormPage = () => {
                 }
                 
                 const data = await response.json();
-                // Use the example structure if fetch fails or for testing
-                /* const data = {
-                         "available_courses": ["CPIT-499", "CPIT-550", "CPIT-503", "CPIT-502", "CPIT-332", "CPIT-504", "CPIS-334", "CPIT-500"],
-                         "form_id": "2",
-                         "max_graduate_hours": 21, // Assuming this comes from API
-                         "plan_id": "IT",
-                         "previously_selected_courses": [], // Assuming this comes from API
-                         "recommended_courses": ["CPIT-332"],
-                         "unavailable_due_to_completion": [], // Assuming this comes from API
-                         "unavailable_due_to_prerequisites": [{"course_id": "CPIT-501", "missing": ["CPIT-332"]}]
-                     }; */
                 setCoursesObj(data);
-                // Initialize selected courses based on previously selected ones if needed
                 setSelectedCourses(data.previously_selected_courses || []);
                 setNeedUpdate(false)
             } catch (error) {
                 console.error("Error fetching plan details:", error);
-                // Handle fetch error (e.g., show error message)
             } finally {
                 setIsLoading(false);
             }
@@ -79,14 +66,12 @@ const FillFormPage = () => {
 
         fetchCourses();
 
-    }, [location, navigate, user]); // Dependencies for the effect
+    }, [location, navigate, user]);
 
     const handleSubmit = () => {
         sendSubmit().finally(() => {
             // Display success message
-            alert('Form submitted successfully!'); // Simple success alert
-
-            console.log("Form submitted successfully. Navigating..."); // Optional: log success
+            alert('Form submitted successfully!'); //success alert
 
             // Navigate the user after successful submission and showing the message
             navigate('/AvailableForms'); // Navigate back to AvailableForms page
@@ -126,8 +111,8 @@ const FillFormPage = () => {
     const handleCheckboxChange = (courseId) => {
         setSelectedCourses(prevSelected =>
             prevSelected.includes(courseId)
-                ? prevSelected.filter(id => id !== courseId) // Uncheck: remove course
-                : [...prevSelected, courseId] // Check: add course
+                ? prevSelected.filter(id => id !== courseId) 
+                : [...prevSelected, courseId] 
         );
     };
 
@@ -226,7 +211,7 @@ const FillFormPage = () => {
                     <p className="text-gray-700 mb-2">
                         Selected Hours: <span className="font-bold">{currentWorkload}</span> / {coursesObj.max_graduate_hours || 'N/A'} Max Hours
                     </p>
-                    {/* Simple Progress Bar */}
+                    {/* Progress Bar */}
                     <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
                         <div
                             className={`h-2.5 rounded-full transition-all duration-300 ease-out ${currentWorkload > coursesObj.max_graduate_hours ? 'bg-danger-dark' : 'bg-primary-light'}`} // Change color if over limit

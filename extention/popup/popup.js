@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             // Check if the URL matches the allowed pattern
             if (!tabUrl.startsWith("https://odusplus-ss.kau.edu.sa/PROD/ywsksinf.P_Display_All_Info")) {
-                messageDiv.innerHTML = '<p>This is not the correct page. Please navigate to <a href="https://odusplus-ss.kau.edu.sa/PROD/ywsksinf.P_Display_All_Info">Odus-Plus Student info</a> </p>'
+                messageDiv.innerHTML = '<p>This is not the correct page. Please navigate to <a target="_blank" href="https://odusplus-ss.kau.edu.sa/PROD/ywsksinf.P_Display_All_Info">Odus-Plus Student info</a> </p>'
                 return;
             }
 
@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         .then(data => {
                             const prossedData = data;
                             if (!prossedData.error) {
-                                messageDiv.textContent = "Success!";
+                                messageDiv.textContent = "Success! Please Navigate Back to Irshadi Website";
                             }
                             else {
                                 messageDiv.textContent = "error ! message: " + prossedData.error
