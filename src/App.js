@@ -7,7 +7,7 @@ import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
 import { ExtraInfoProvider } from './contexts/BackEndContext';
 import { AdminRoute, StudentRoute, UserRoute } from './contexts/ProtectedRoute';
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router";
 import AvailableForms from './pages/StudnetPages/AvailableForms';
 import StudentImportRecordPage from './pages/StudnetPages/StudentImportRecordPage';
 import FillFormPage from './pages/StudnetPages/FillFormPage';

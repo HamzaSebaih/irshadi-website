@@ -1,12 +1,12 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import SignupPage from '../../SignupPage'; // Adjust the import path as needed
-import { BrowserRouter } from 'react-router-dom';
+import SignupPage from '../../pages/LoginPages/SignupPage'; // Adjust the import path as needed
+import { BrowserRouter } from 'react-router';
 
 // Mock the dependencies and context
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+  ...jest.requireActual('react-router'),
   useNavigate: () => jest.fn()
 }));
 
@@ -35,7 +35,7 @@ jest.mock('lottie-react', () => ({
   default: () => <div data-testid="lottie-animation" />
 }));
 
-jest.mock('../../../assets/Animation.json', () => ({}));
+jest.mock('../../assets/Animation.json', () => ({}));
 
 // Mock the Lucide React icons
 jest.mock('lucide-react', () => ({

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getAuth, sendPasswordResetEmail } from "firebase/auth";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 const ForgetPassPage = () => {
   const [email, setEmail] = useState("");
