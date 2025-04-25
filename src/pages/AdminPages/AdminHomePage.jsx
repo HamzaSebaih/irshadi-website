@@ -314,25 +314,24 @@ const AdminHomePage = () => {
       if (sectionCapacity != "" && timePreference != "") {
         body = {
           form_id: formThatWantToPrintReport.form_id,
-          sectionCapacity: Number(sectionCapacity),
-          timePreference: timePreference
+          section_capacity: Number(sectionCapacity),
+          time_preference: timePreference
         }
       } else if (sectionCapacity != "") {
         body = {
           form_id: formThatWantToPrintReport.form_id,
-          sectionCapacity: Number(sectionCapacity),
+          section_capacity: Number(sectionCapacity),
         }
       } else if (timePreference != "") {
         body = {
           form_id: formThatWantToPrintReport.form_id,
-          timePreference: timePreference
+          time_preference: timePreference
         }
       } else {
         body = {
           form_id: formThatWantToPrintReport.form_id,
         }
       }
-
       const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/generateSectionSchedule`, {
         method: "POST",
