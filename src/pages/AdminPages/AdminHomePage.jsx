@@ -310,6 +310,7 @@ const AdminHomePage = () => {
       return;
     }
     try {
+      setIsLoading(true)
       let body = {}
       if (sectionCapacity != "" && timePreference != "") {
         body = {
@@ -359,6 +360,7 @@ const AdminHomePage = () => {
       alert(error)
     }
     finally {
+      setIsLoading(false)
       setTimePreference("")
       setSectionCapacity("")
     }
@@ -832,7 +834,10 @@ const AdminHomePage = () => {
                 Graduating Students
               </button>
 
-              <button onClick={() => setIsPopUpForAiClicked(true)} className="inline-flex justify-center rounded-md border border-transparent bg-secondary px-4 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-secondary-dark focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
+              <button onClick={() => 
+              setIsPopUpForAiClicked(true)
+                
+              } className="inline-flex justify-center rounded-md border border-transparent bg-secondary px-4 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-secondary-dark focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
                 Schedule (AI)
               </button>
             </div>
