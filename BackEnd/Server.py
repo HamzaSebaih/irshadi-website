@@ -2128,7 +2128,8 @@ def generate_section_schedule(decoded_token):
             "constraints": [
                 f"Default section capacity: {section_capacity} students.",
                 time_constraint_text, # Use the dynamically generated text
-                "Prioritize minimizing time conflicts between sections of different courses within the same level. Maximize non-conflicting options.",
+                "Prioritize minimizing time conflicts between sections of different courses within the same level.",
+                "Time slots can be used by multiple sections of any course at the same time. "
                 "3-credit courses require three 50-min slots (Sun/Tue/Thu) OR two 80-min slots (Mon/Wed).",
                 "2-credit courses require two 50-min slots (Sun/Tue/Thu)."
             ],
