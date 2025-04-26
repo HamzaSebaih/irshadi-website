@@ -8,107 +8,113 @@ import Lottie from "lottie-react";
 import animationData from "../../assets/Animation.json";
 
 const SignupPage = () => {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [validationErrors, setValidationErrors] = useState({});
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [userInfo, setUserInfo] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [notifications, setNotifications] = useState({ type: "", msg: "" });
+  const [errors, setErrors] = useState({});
+  const [termsChecked, setTermsChecked] = useState(false);
+
   const { signup, logout } = useAuth();
   const navigate = useNavigate();
+
   const auth = getAuth();
-  const googleProvider = new GoogleAuthProvider();
+  const provider = new GoogleAuthProvider();
 
-  const validateEmail = (email) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  const validatePassword = (password) => ({
-    hasUppercase: /[A-Z]/.test(password),
-    hasNumber: /[0-9]/.test(password),
-    minLength: password.length >= 8,
+  const validateEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+  // method to check if password requirement were satisfied
+  const checkPassword = (pwd) => ({
+    uppercase: /[A-Z]/.test(pwd),
+    number: /[0-9]/.test(pwd),
+    lengthOk: pwd.length >= 8,
   });
+
+  const handleInput = (e) => {
+    setUserInfo(prev => ({ ...prev, [e.target.id]: e.target.value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccessMessage("");
-    const errors = {};
+    setNotifications({ type: "", msg: "" });
+    const validation = {};
 
-    // Required Fields Check
-    if (!firstName) errors.firstName = "First name is required.";
-    if (!lastName) errors.lastName = "Last name is required.";
-    if (!email) errors.email = "Email is required.";
-    else if (!validateEmail(email)) errors.email = "Invalid email format.";
+    if (!userInfo.firstName.trim()) validation.firstName = "First name required.";
+    if (!userInfo.lastName.trim()) validation.lastName = "Last name is missing.";
 
-    const pwdValidation = validatePassword(password);
-    if (!password) errors.password = "Password is required.";
-    else if (!pwdValidation.hasUppercase || !pwdValidation.hasNumber || !pwdValidation.minLength) {
-      errors.password = "Password does not meet the requirements.";
+    if (!userInfo.email) {
+      validation.email = "Provide an email.";
+    } else if (!validateEmail(userInfo.email)) {
+      validation.email = "Email format seems wrong.";
     }
 
-    if (!confirmPassword) errors.confirmPassword = "Please confirm your password.";
-    else if (password !== confirmPassword) errors.confirmPassword = "Passwords do not match.";
+    const pwdStatus = checkPassword(userInfo.password);
+    if (!userInfo.password) {
+      validation.password = "Password can't be empty.";
+    } else if (!pwdStatus.uppercase || !pwdStatus.number || !pwdStatus.lengthOk) {
+      validation.password = "Weak password. Add uppercase, number, and min 8 chars.";
+    }
 
-    if (!agreedToTerms) errors.terms = "You must agree to the Terms and Conditions.";
+    if (!userInfo.confirmPassword) {
+      validation.confirmPassword = "Re-enter your password.";
+    } else if (userInfo.password !== userInfo.confirmPassword) {
+      validation.confirmPassword = "Passwords don't match.";
+    }
 
-    setValidationErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (!termsChecked) {
+      validation.terms = "Agree to terms first.";
+    }
+
+    setErrors(validation);
+
+    if (Object.keys(validation).length) return;
 
     try {
-      const userCredential = await signup(email, password);
-      setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
-      await sendEmailVerification(userCredential.user);
+      const res = await signup(userInfo.email, userInfo.password);
+      console.log("Signup success, sending email verification...");
+      await sendEmailVerification(res.user);
       await logout();
-      console.log("Email/Password Signup Successful, Verification Email Sent");
-      setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
 
-      setTimeout(() => {
-        navigate("/LoginPage");
-      }, 3000);
-    } catch (error) {
-      console.error("Email/Password Signup Error:", error.code, error.message);
-      const msg =
-        error.code === "auth/email-already-in-use"
-          ? "This email is already in use."
-          : `Failed to create an account: ${error.message}`;
-      setError(msg);
+      setNotifications({ type: "success", msg: "Check your inbox to verify!" });
+      setTimeout(() => navigate("/LoginPage"), 3000);
+    } catch (err) {
+      console.error("Signup went wrong:", err);
+      const customMsg = err.code === "auth/email-already-in-use"
+        ? "This email is taken."
+        : `Something broke: ${err.message}`;
+      setNotifications({ type: "error", msg: customMsg });
     }
   };
 
-  const handleGoogleSignUp = async () => {
+  const handleGoogleSignup = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
-      console.log("Google Signup Successful");
-      setSuccessMessage("A verification email has been sent to your email address. Please verify your email.");
-      await getAuth().signOut();
-      setTimeout(() => {
-        navigate("/");
-      }, 3000);
-    } catch (error) {
-      console.error("Google Signup Error:", error.code, error.message);
-      setError(`Failed to sign up with Google: ${error.message}`);
+      await signInWithPopup(auth, provider);
+      console.log("Signed in with Google");
+      setNotifications({ type: "success", msg: "Signed up via Google. Verify email!" });
+      await auth.signOut();
+      setTimeout(() => navigate("/"), 3000);
+    } catch (err) {
+      console.error("Google signup error:", err);
+      setNotifications({ type: "error", msg: `Google signup failed: ${err.message}` });
     }
   };
 
-  const openTerms = () => {
+  const openTermsTab = () => {
     window.open("/terms", "_blank");
   };
 
-  const passwordChecks = validatePassword(password);
+  const pwdValidation = checkPassword(userInfo.password);
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-blue-100 to-white">
-      {/* Left Panel */}
-      <motion.div
-        initial={{ opacity: 0, x: -100 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1 }}
-        className="w-1/2 bg-blue-700 text-white p-12 flex flex-col justify-center items-center"
-      >
+      <motion.div initial={{ opacity: 0, x: -100 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="w-1/2 bg-blue-700 text-white p-12 flex flex-col justify-center items-center">
         <Lottie animationData={animationData} loop autoplay className="w-3/4 max-w-md" />
         <h1 className="text-4xl font-extrabold mb-6 leading-tight mt-6">
           Welcome to <br />
@@ -117,177 +123,100 @@ const SignupPage = () => {
         <p className="text-lg mb-8">Create an account to begin your journey</p>
       </motion.div>
 
-      {/* Right Panel */}
-      <motion.div
-        initial={{ opacity: 0, x: 100 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1 }}
-        className="w-1/2 flex items-center justify-center bg-white"
-      >
+      <motion.div initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="w-1/2 flex items-center justify-center bg-white">
         <div className="bg-white/70 backdrop-blur-lg rounded-xl shadow-lg p-10 w-full max-w-md">
           <h2 className="text-3xl font-bold mb-2 text-gray-800">Sign Up</h2>
-          <p className="text-sm text-gray-500 mb-6">Join us today! Please enter your details.</p>
+          <p className="text-sm text-gray-500 mb-6">Join us today! Enter your details below.</p>
 
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-red-100 text-red-700 border border-red-300 p-3 rounded mb-4"
-            >
-              {error}
-            </motion.div>
-          )}
-
-          {successMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-green-100 text-green-700 border border-green-300 p-3 rounded mb-4"
-            >
-              {successMessage}
+          {notifications.msg && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className={`p-3 rounded mb-4 ${notifications.type === "error" ? "bg-red-100 text-red-700 border border-red-300" : "bg-green-100 text-green-700 border border-green-300"}`}>
+              {notifications.msg}
             </motion.div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* First Name */}
-            <div>
-              <label htmlFor="firstName" className="block text-sm text-gray-600">First Name</label>
-              <input
-                id="firstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              />
-              {validationErrors.firstName && <p className="text-red-500 text-xs mt-1">{validationErrors.firstName}</p>}
-            </div>
+            {['firstName', 'lastName', 'email'].map((id) => (
+              <div key={id}>
+                <label htmlFor={id} className="block text-sm text-gray-600 capitalize">{id.replace(/([A-Z])/, ' $1')}</label>
+                <input
+                  id={id}
+                  type={id === 'email' ? 'email' : 'text'}
+                  value={userInfo[id]}
+                  onChange={handleInput}
+                  className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                />
+                {errors[id] && <p className="text-red-500 text-xs mt-1">{errors[id]}</p>}
+              </div>
+            ))}
 
-            {/* Last Name */}
-            <div>
-              <label htmlFor="lastName" className="block text-sm text-gray-600">Last Name</label>
-              <input
-                id="lastName"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              />
-              {validationErrors.lastName && <p className="text-red-500 text-xs mt-1">{validationErrors.lastName}</p>}
-            </div>
-
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm text-gray-600">Email</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              />
-              {validationErrors.email && <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>}
-            </div>
-
-            {/* Password */}
             <div className="relative">
               <label htmlFor="password" className="block text-sm text-gray-600">Password</label>
               <input
                 id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type={passwordVisible ? "text" : "password"}
+                value={userInfo.password}
+                onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none pr-10"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition"
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              <button type="button" onClick={() => setPasswordVisible(prev => !prev)} className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition">
+                {passwordVisible ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
-              {validationErrors.password && <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>}
+              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
 
-              {/* Password Requirements */}
-              {password.length > 0 && (
+              {userInfo.password && (
                 <ul className="text-xs mt-2 ml-1 space-y-1">
-                  <li className={passwordChecks.hasUppercase ? "text-green-600" : "text-gray-500"}>
-                    {passwordChecks.hasUppercase ? "✓" : "✗"} At least one uppercase letter
-                  </li>
-                  <li className={passwordChecks.hasNumber ? "text-green-600" : "text-gray-500"}>
-                    {passwordChecks.hasNumber ? "✓" : "✗"} At least one number
-                  </li>
-                  <li className={passwordChecks.minLength ? "text-green-600" : "text-gray-500"}>
-                    {passwordChecks.minLength ? "✓" : "✗"} Minimum 8 characters
-                  </li>
+                  <li className={pwdValidation.uppercase ? "text-green-600" : "text-gray-500"}>At least one uppercase letter</li>
+                  <li className={pwdValidation.number ? "text-green-600" : "text-gray-500"}>At least one number</li>
+                  <li className={pwdValidation.lengthOk ? "text-green-600" : "text-gray-500"}>Minimum 8 characters</li>
                 </ul>
               )}
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label htmlFor="confirmPassword" className="block text-sm text-gray-600">Confirm Password</label>
               <input
                 id="confirmPassword"
-                type={showPassword ? "text" : "password"}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                type={passwordVisible ? "text" : "password"}
+                value={userInfo.confirmPassword}
+                onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
-              {validationErrors.confirmPassword && <p className="text-red-500 text-xs mt-1">{validationErrors.confirmPassword}</p>}
+              {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
             </div>
-            {/* Terms and Conditions Checkbox */}
+
             <div className="flex items-start mt-4">
               <div className="flex items-center h-5">
                 <input
                   id="terms"
                   type="checkbox"
-                  checked={agreedToTerms}
-                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  checked={termsChecked}
+                  onChange={(e) => setTermsChecked(e.target.checked)}
                   className="w-4 h-4 border border-gray-300 rounded bg-gray-50 focus:ring-2 focus:ring-blue-300"
                 />
               </div>
               <div className="ml-3 text-sm">
                 <label htmlFor="terms" className="text-gray-600">
-                  I agree to the{" "}
-                  <span onClick={openTerms} className="text-blue-600 hover:underline cursor-pointer">
-                    Terms and Conditions
-                  </span>
+                  I agree to the <span onClick={openTermsTab} className="text-blue-600 hover:underline cursor-pointer">Terms and Conditions</span>
                 </label>
-                {validationErrors.terms && <p className="text-red-500 text-xs mt-1">{validationErrors.terms}</p>}
+                {errors.terms && <p className="text-red-500 text-xs mt-1">{errors.terms}</p>}
               </div>
             </div>
 
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
-            >
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition">
               Sign Up
             </motion.button>
 
-            {/* Link to Login */}
             <div className="text-center text-sm text-blue-600 mt-4">
-              Already have an account?{" "}
-              <Link to="/" className="font-semibold hover:underline">
-                Login
-              </Link>
+              Already registered? <Link to="/" className="font-semibold hover:underline">Login</Link>
             </div>
 
-            {/* Google Sign Up */}
             <div className="flex items-center my-4">
               <hr className="flex-grow border-gray-300" />
               <span className="mx-2 text-sm text-gray-500">OR</span>
               <hr className="flex-grow border-gray-300" />
             </div>
 
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleGoogleSignUp}
-              type="button"
-              className="w-full flex items-center justify-center gap-3 border border-gray-300 py-2 rounded-md hover:bg-gray-100 transition"
-            >
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleGoogleSignup} type="button" className="w-full flex items-center justify-center gap-3 border border-gray-300 py-2 rounded-md hover:bg-gray-100 transition">
               <img src="/search.png" alt="Google" className="w-5 h-5" />
               Continue with Google
             </motion.button>
