@@ -5,178 +5,148 @@ import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
-import animationData from "../../assets/Animation.json"; // Correctly imported animation data
-import ProfileCompletionPage from "./ProfileCompletionPage"; // Assuming path is correct
+import animationData from "../../assets/Animation.json";
+import ProfileCompletionPage from "./ProfileCompletionPage";
 
 const LoginPage = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userPassword, setUserPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [remember, setRemember] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
   const { login } = useAuth();
   const navigate = useNavigate();
   const auth = getAuth();
-  const googleProvider = new GoogleAuthProvider();
+  const googleAuth = new GoogleAuthProvider();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
+  // method to handle when user submit his credentals
+  const submitForm = async (event) => {
+    event.preventDefault();
+    setLoginError("");
     try {
-      const userCredential = await login(email, password);
- 
-      if(auth.currentUser.emailVerified){
-        console.log("email verified")
+      await login(userEmail, userPassword);
+      if (auth.currentUser?.emailVerified) {
+        console.log("Email verified!");
       }
       navigate("/loading");
-    } catch (error) {
-      setError("The Email address or Password is incorrect");
+    } catch (err) {
+      console.error("Login failed", err);
+      setLoginError("Wrong credentials. Check and try again.");
+    }
+  };
+  // handle Google login when user click the button
+  const googleLogin = async () => {
+    try {
+      const res = await signInWithPopup(auth, googleAuth);
+      if (res.additionalUserInfo?.isNewUser) {
+        navigate("/ProfileCompletionPage");
+      } else {
+        navigate("/loading");
+      }
+    } catch (err) {
+      console.error("Google login error:", err);
+      setLoginError("Couldn't sign in with Google.");
     }
   };
 
-  async function handleGoogleLogin() {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-
-      //Check if it's a new user
-      if (result.additionalUserInfo?.isNewUser) {
-        navigate('/ProfileCompletionPage');
-      } else {
-        navigate('/loading');
-      }
-    } catch (error) {
-      setError('Failed to login with Google.');
-    }
-  }
-
-
-  ; // Original semicolon kept
   return (
-    // Use consistent light background
     <div className="flex min-h-screen bg-gray-100">
-      {/* Left Panel - Use primary theme color */}
+      {/* Left Panel */}
       <motion.div
-        initial={{ opacity: 0, x: -100 }}
+        initial={{ opacity: 0, x: -120 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1 }}
-        className="hidden w-1/2 flex-col items-center justify-center bg-primary-dark p-12 text-white relative lg:flex" // Use theme color, hide on smaller screens
+        transition={{ duration: 0.8 }}
+        className="hidden lg:flex flex-col items-center justify-center w-1/2 bg-primary-dark text-white p-10"
       >
-        <Lottie
-          animationData={animationData} // Original animation
-          loop
-          autoplay
-          className="w-3/4 max-w-md"
-        />
-        <h1 className="mt-6 text-center text-4xl font-extrabold leading-tight">
-          Welcome to <br />
-          <span className="text-primary-light">Irashadi Platform</span> {/* Use theme color */}
-        </h1>
-        <p className="mt-4 text-center text-lg">Login to continue your journey</p>
+        <Lottie animationData={animationData} loop autoplay className="w-3/4 max-w-md" />
+        <h1 className="mt-6 text-4xl font-bold text-center">Welcome to <span className="text-primary-light">Irashadi</span></h1>
+        <p className="mt-4 text-lg text-center">Glad to have you here!</p>
       </motion.div>
 
-      {/* Right Panel - Login Form */}
+      {/* Right Panel - Form */}
       <motion.div
-        initial={{ opacity: 0, x: 100 }}
+        initial={{ opacity: 0, x: 120 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1 }}
-        className="flex w-full items-center justify-center lg:w-1/2" // Take full width on small screens
+        transition={{ duration: 0.8 }}
+        className="flex w-full lg:w-1/2 items-center justify-center"
       >
-        {/* Form Container - Styled consistently */}
-        <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow-lg m-4">
-          <h2 className="text-center text-2xl font-bold text-gray-900 md:text-3xl">Sign In</h2>
-          <p className="mb-6 mt-2 text-center text-sm text-gray-500">
-            Welcome back! Please enter your details.
-          </p>
+        <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-md border border-gray-200 m-4">
+          <h2 className="text-2xl font-semibold text-center text-gray-800">Sign In</h2>
+          <p className="text-center text-sm text-gray-500 mt-2 mb-6">Access your account below</p>
 
-          {/* Error Message - Use danger theme color */}
-          {error && (
+          {loginError && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 rounded-md border border-danger bg-danger-light p-3 text-sm text-danger-dark" // Use theme danger colors
+              className="mb-4 p-3 bg-danger-light border border-danger text-danger-dark rounded-md text-sm"
             >
-              {error}
+              {loginError}
             </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Input */}
+          <form onSubmit={submitForm} className="space-y-5">
             <div>
-              <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
-                Email
-              </label>
+              <label htmlFor="email" className="block mb-1 text-sm font-medium text-gray-700">Email</label>
               <input
                 type="email"
                 id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none" // Consistent input style
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 required
               />
             </div>
 
-            {/* Password Input */}
             <div className="relative">
-              <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
-                Password
-              </label>
+              <label htmlFor="password" className="block mb-1 text-sm font-medium text-gray-700">Password</label>
               <input
-                type={showPassword ? "text" : "password"}
+                type={showPass ? "text" : "password"}
                 id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none" // Consistent input style + padding for icon
+                value={userPassword}
+                onChange={(e) => setUserPassword(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 required
               />
-              {/* Show/Hide Password Button */}
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 top-6 flex items-center pr-3 text-gray-400 hover:text-primary" // Adjusted position & hover color
-                title={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPass(!showPass)}
+                className="absolute inset-y-0 right-0 top-6 flex items-center pr-3 text-gray-400 hover:text-primary"
+                title={showPass ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
 
-            {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <label className="flex items-center text-sm text-gray-600">
                 <input
                   type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="mr-2 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" // Styled checkbox
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="mr-2 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 />
-                Remember me
+                Keep me signed in
               </label>
-              {/* Forgot Password Link - Use accent color */}
-              <Link to="/ForgetPassPage" className="text-sm text-accent hover:text-accent-dark hover:underline">
-                Forgot password?
-              </Link>
+              <Link to="/ForgetPassPage" className="text-sm text-accent hover:underline">Forgot password?</Link>
             </div>
 
-            {/* Sign Up Link - Use accent color */}
-            <div className="text-center text-sm text-gray-500"> {/* Changed base text color */}
-              Don’t have an account?{" "}
-              <Link to="/SignupPage" className="font-medium text-accent hover:text-accent-dark hover:underline">
-                Sign up
-              </Link>
+            <div className="text-center text-sm text-gray-500">
+              New here?{' '}
+              <Link to="/SignupPage" className="font-medium text-accent hover:underline">Create account</Link>
             </div>
 
-            {/* Login Button - Use primary color */}
             <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               type="submit"
-              className="inline-flex w-full items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2" // Consistent primary button style
+              className="w-full px-4 py-2 bg-primary text-white rounded-md font-medium shadow hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
-              Login
+              Sign In
             </motion.button>
 
-            {/* OR Divider */}
             <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-300" />
               </div>
               <div className="relative flex justify-center text-sm">
@@ -184,16 +154,14 @@ const LoginPage = () => {
               </div>
             </div>
 
-
-            {/* Google Login Button - Styled as secondary/outline */}
             <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleGoogleLogin}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               type="button"
-              className="inline-flex w-full items-center justify-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2" // Consistent secondary button style
+              onClick={googleLogin}
+              className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-gray-300 bg-white rounded-md text-gray-700 shadow hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
             >
-              <img src="/search.png" alt="Google" className="h-5 w-5" /> {/* Ensure this image path is correct */}
+              <img src="/search.png" alt="Google" className="h-5 w-5" />
               Continue with Google
             </motion.button>
           </form>
