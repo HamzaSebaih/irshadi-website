@@ -2030,8 +2030,10 @@ def generate_section_schedule(decoded_token):
             return jsonify({"error": "Missing JSON request body"}), 400
         form_id = data.get('form_id')
         section_capacity = data.get('section_capacity', 25)
+        
         time_preference = data.get('time_preference', "MorningAndAfternoonFocus")
-
+        print(section_capacity)#testing
+        print(time_preference)#testing
         # Validate inputs
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
             return jsonify({"error": "Missing or invalid 'form_id'"}), 409
@@ -2126,7 +2128,8 @@ def generate_section_schedule(decoded_token):
             "constraints": [
                 f"Default section capacity: {section_capacity} students.",
                 time_constraint_text, # Use the dynamically generated text
-                "Prioritize minimizing time conflicts between sections of different courses within the same level. Maximize non-conflicting options.",
+                "Prioritize minimizing time conflicts between sections of different courses within the same level.",
+                "Time slots can be used by multiple sections of any course at the same time. "
                 "3-credit courses require three 50-min slots (Sun/Tue/Thu) OR two 80-min slots (Mon/Wed).",
                 "2-credit courses require two 50-min slots (Sun/Tue/Thu)."
             ],
@@ -2175,6 +2178,7 @@ def generate_section_schedule(decoded_token):
             model_name = 'gemini-2.0-flash' # Using the model specified by the user
             print(f"--- Using Model: {model_name} ---")
             print(f"--- SENDING PROMPT TO LLM API (Client Method) ---")
+            print(prompt_string)#testing
 
             response = client.models.generate_content(
                 model=model_name,
@@ -2232,8 +2236,9 @@ def generate_section_schedule(decoded_token):
              except Exception: pass
              return jsonify({"error": "Failed to get schedule from AI service (unknown reason)."}), 503
         # --- End API Call Block ---
+        
 
-
+        print(generated_schedule)#testing
         # --- 9. Return Generated Schedule ---
         return jsonify({
             "form_id": form_id,
