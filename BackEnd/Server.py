@@ -230,7 +230,7 @@ def generate_time_slots():
     days_80 = ["Monday", "Wednesday"]
     break_start = time(12, 0)
     break_end = time(13, 0)
-    end_of_day = time(22, 0) # 10 PM
+    end_of_day = time(18, 0) # 6 PM
 
     # Generate 50-min slots (Sun, Tue, Thu)
     for day in days_50:
@@ -2113,25 +2113,28 @@ def generate_section_schedule(decoded_token):
         # --- 6. Generate Available Time Slots ---
         slots_50_min, slots_80_min = generate_time_slots()
 
-        # --- 7. Structure Data for Prompt ---
+        # --- 7. Structure Data for Prompt (with REFINED constraints) ---
         # Dynamically set time constraint text based on the two valid preferences
         if time_preference == "MorningAndAfternoonFocus":
-            time_constraint_text = "Time preference: Focus scheduling sections primarily in the Morning (before 12 PM) and Afternoon (1 PM to 5 PM / 13:00-17:00). Minimize Evening slots (after 5 PM / 17:00)."
+            time_constraint_text = "Time preference: Strongly focus scheduling sections in the Morning (before 12 PM) and Afternoon (1 PM to 5 PM / 13:00-17:00)."
         elif time_preference == "AfternoonAndEveningFocus":
-            time_constraint_text = "Time preference: Focus scheduling sections primarily in the Afternoon (1 PM to 5 PM / 13:00-17:00) and Evening (5 PM / 17:00 or later, but minimize slots after 9 PM / 21:00). Minimize Morning slots (before 12 PM)."
+            time_constraint_text = "Time preference: Strongly focus scheduling sections in the Afternoon (1 PM to 5 PM / 13:00-17:00) and Early Evening (5 PM to 8 PM / 17:00-20:00)."
         else: # Fallback
-             time_constraint_text = "Time preference: General distribution, minimize very late evening (after 9 PM / 21:00)."
+             time_constraint_text = "Time preference: General distribution."
 
-        # *** Construct the prompt_data dictionary explicitly ***
+        # Construct the prompt_data dictionary with refined constraints
         prompt_data = {
             "goal": "Generate a weekly class schedule assigning time slots to course sections.",
             "constraints": [
                 f"Default section capacity: {section_capacity} students.",
-                time_constraint_text, # Use the dynamically generated text
-                "Prioritize minimizing time conflicts between sections of different courses within the same level.",
-                "Time slots can be used by multiple sections of any course at the same time. "
-                "3-credit courses require three 50-min slots (Sun/Tue/Thu) OR two 80-min slots (Mon/Wed).",
-                "2-credit courses require two 50-min slots (Sun/Tue/Thu)."
+                time_constraint_text,
+                "Prioritize minimizing time conflicts between sections of different courses listed in the same 'level_groupings' entry. Maximize non-conflicting options.",
+                # *** Refined Slot Reuse Constraint ***
+                "To satisfy the time preference efficiently, reuse popular time slots within the preferred time blocks across different sections (even for the same course) where possible.",
+                # *** Refined Evening Constraint ***
+                "3-credit courses require exactly three 50-min slots (Sun/Tue/Thu) OR exactly two 80-min slots (Mon/Wed).",
+                "2-credit courses require exactly two 50-min slots (Sun/Tue/Thu).",
+                "The same time slots are given across compatible days to a course section"
             ],
             "courses_to_schedule": [
                 {"course_id": cid, **info} for cid, info in courses_info.items()
@@ -2139,20 +2142,13 @@ def generate_section_schedule(decoded_token):
             "level_groupings": dict(course_levels),
             "available_50_min_slots": slots_50_min,
             "available_80_min_slots": slots_80_min,
-            # *** Include full desired_output_format structure ***
-            "desired_output_format": {
+            "desired_output_format": { # Explicitly defined
                 "description": "A JSON object where keys are course IDs. Each value is a list of sections for that course. Each section has a unique name (e.g., COURSE_ID-1, COURSE_ID-2) and a list of assigned time slots (day, start, end).",
                 "example": {
-                    "CPIT-XXX": [
-                        {"section_name": "CPIT-XXX-1", "slots": [{"day": "Mon", "start": "HH:MM", "end": "HH:MM"}, {"day":"Wed", "start":"HH:MM", "end":"HH:MM"}]},
-                        {"section_name": "CPIT-XXX-2", "slots": []}
-                    ],
-                    "CPIT-YYY": [
-                         {"section_name": "CPIT-YYY-1", "slots": [{"day": "Sun", "start": "HH:MM", "end": "HH:MM"}, {"day":"Tue", "start":"HH:MM", "end":"HH:MM"}, {"day":"Thu", "start":"HH:MM", "end":"HH:MM"}]}
-                    ]
+                    "CPIT-XXX": [{"section_name": "CPIT-XXX-1", "slots": [{"day": "Mon", "start": "HH:MM", "end": "HH:MM"}, {"day":"Wed", "start":"HH:MM", "end":"HH:MM"}]},{"section_name": "CPIT-XXX-2", "slots": []}],
+                    "CPIT-YYY": [{"section_name": "CPIT-YYY-1", "slots": [{"day": "Sun", "start": "HH:MM", "end": "HH:MM"}, {"day":"Tue", "start":"HH:MM", "end":"HH:MM"}, {"day":"Thu", "start":"HH:MM", "end":"HH:MM"}]}]
                 }
             }
-            # *** End of desired_output_format ***
         }
         prompt_string = f"""
         Please generate a weekly class schedule based on the following data and constraints.
