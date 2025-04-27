@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate, Link } from "react-router";
-import { getAuth, signInWithPopup, GoogleAuthProvider, sendEmailVerification } from "firebase/auth";
+import { getAuth, signInWithPopup, GoogleAuthProvider, sendEmailVerification,updateProfile  } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
@@ -80,6 +80,9 @@ const SignupPage = () => {
       const res = await signup(userInfo.email, userInfo.password);
       console.log("Signup success, sending email verification...");
       await sendEmailVerification(res.user);
+      await updateProfile(res.user, {
+        displayName: `${userInfo.firstName} ${userInfo.lastName}`,
+      });
       await logout();
 
       setNotifications({ type: "success", msg: "Check your inbox to verify your email!" });

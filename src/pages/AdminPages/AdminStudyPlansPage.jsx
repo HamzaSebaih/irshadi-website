@@ -180,7 +180,7 @@ const AdminStudyPlansPage = () => {
                            {plan.plan_id || plan.plan_name}
                         </h2>
                         <p className="mt-1 text-xs text-gray-500">
-                           Levels: { Object.keys(plan.levels).length} | Required Hours: {plan.required_hours ?? 'N/A'}
+                           Levels: { Object.keys(plan.levels).length-1} | Required Hours: {plan.required_hours ?? 'N/A'}
                         </p>
                     </div>
                     <div className="flex-grow p-4 pt-0">

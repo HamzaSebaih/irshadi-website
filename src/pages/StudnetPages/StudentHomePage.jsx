@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router";
-// import { useAuth } from "../../contexts/AuthContext";
+ import { useAuth } from "../../contexts/AuthContext";
 import { useExtraInfo } from "../../contexts/BackEndContext";
 
 const StudentHomePage = () => {
-    // const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
+     const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
     const { extraInfo } = useExtraInfo();
     const navigate = useNavigate(); 
     return (
@@ -15,7 +15,7 @@ const StudentHomePage = () => {
                     <div className="space-y-8 text-xl">
                         <h3 className="text-2xl font-semibold text-gray-700">Current Student Info:</h3>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Name:</span> {extraInfo.name ?? "No Data"}
+                            <span className="font-medium text-gray-900">Name:</span> { user.displayName ?? extraInfo.name ?? "No Data"}
                         </p>
                         <p className="text-gray-700">
                             <span className="font-medium text-gray-900">Current Progress:</span> {extraInfo.hours.completed ?? "No Data"}
