@@ -5,15 +5,14 @@ import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
-import animationData from "../../assets/Animation.json";
-import ProfileCompletionPage from "./ProfileCompletionPage";
+import myAnimation from "../../assets/Animation.json";
 
 const LoginPage = () => {
-  const [userEmail, setUserEmail] = useState("");
-  const [userPassword, setUserPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(false);
-  const [loginError, setLoginError] = useState("");
+  const [error, setError] = useState("");
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -23,16 +22,12 @@ const LoginPage = () => {
   // method to handle when user submit his credentals
   const submitForm = async (event) => {
     event.preventDefault();
-    setLoginError("");
+    setError("");
     try {
-      await login(userEmail, userPassword);
-      if (auth.currentUser?.emailVerified) {
-        console.log("Email verified!");
-      }
+      await login(email, password);
       navigate("/loading");
     } catch (err) {
-      console.error("Login failed", err);
-      setLoginError("Wrong credentials. Check and try again.");
+      setError("Email or password is wrong.");
     }
   };
   // handle Google login when user click the button
@@ -46,7 +41,7 @@ const LoginPage = () => {
       }
     } catch (err) {
       console.error("Google login error:", err);
-      setLoginError("Couldn't sign in with Google.");
+      setError("Couldn't sign in with Google.");
     }
   };
 
@@ -59,7 +54,7 @@ const LoginPage = () => {
         transition={{ duration: 0.8 }}
         className="hidden lg:flex flex-col items-center justify-center w-1/2 bg-primary-dark text-white p-10"
       >
-        <Lottie animationData={animationData} loop autoplay className="w-3/4 max-w-md" />
+        <Lottie animationData={myAnimation} loop autoplay className="w-3/4 max-w-md" />
         <h1 className="mt-6 text-4xl font-bold text-center">Welcome to <span className="text-primary-light">Irashadi</span></h1>
         <p className="mt-4 text-lg text-center">Glad to have you here!</p>
       </motion.div>
@@ -75,13 +70,13 @@ const LoginPage = () => {
           <h2 className="text-2xl font-semibold text-center text-gray-800">Sign In</h2>
           <p className="text-center text-sm text-gray-500 mt-2 mb-6">Access your account below</p>
 
-          {loginError && (
+          {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               className="mb-4 p-3 bg-danger-light border border-danger text-danger-dark rounded-md text-sm"
             >
-              {loginError}
+              {error}
             </motion.div>
           )}
 
@@ -91,8 +86,8 @@ const LoginPage = () => {
               <input
                 type="email"
                 id="email"
-                value={userEmail}
-                onChange={(e) => setUserEmail(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 required
               />
@@ -103,8 +98,8 @@ const LoginPage = () => {
               <input
                 type={showPass ? "text" : "password"}
                 id="password"
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 required
               />
