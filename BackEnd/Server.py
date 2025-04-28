@@ -1,4 +1,4 @@
-#this is the server program.
+#this is the Backend server program.
 
 #Importing Section ___________
 from flask import Flask, jsonify, request
@@ -20,12 +20,12 @@ import traceback # For detailed error logging
 import google.generativeai as genai
 #End of Importing Section ___________
 
-load_dotenv() # Load environment variables (optional, for production)
+load_dotenv() # Load environment variables
 
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app) #this cors are used to fix the front end request however I read its bad for deployoment @AbdulazizJastanieh
+CORS(app) 
 # Initialize Firestore
 cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsdk-fbsvc-d9b5b63d0d.json")  # this is the credentials that will be used to connect with the firestore
 firebase_admin.initialize_app(cred) #here we make a connection with firebase using our credentials, 
@@ -112,37 +112,36 @@ def login(*args, **kwargs):
         if not name:
             name = email.split('@')[0]  # Derive from email as a fallback
 
-        # Step 1: Check for a "file" named after the email (assumed to be a Firestore doc in 'pendingAdmins')
+        # First check if its a new admin
         pending_admin_ref = db.collection('pendingAdmins').document(email)
         pending_admin_doc = pending_admin_ref.get()
 
         if pending_admin_doc.exists:
             # This user is a new admin
-            # "Rename the file" by moving the data to the 'admins' collection with UID as the document ID
+            # gather his information from token
             admin_data = {
-                "name": name,  # Use name 
+                "name": name,  
                 "email": email,
                 "role": "admin"  # 
             }
             # Create the admin document 
-            db.collection('admins').document(uid).set(admin_data)
+            db.collection('Admins').document(uid).set(admin_data)
             # Delete the pending admin "file"
             pending_admin_ref.delete()
-            # Return the admin data directly (flattened)
+            # Return the admin data 
             return jsonify(admin_data), 200
 
-        # Step 2: Check if UID exists in the 'admins' collection
-        admin_ref = db.collection('admins').document(uid)
+        # Step 2: Check if UID exists in the 'Admins' collection
+        admin_ref = db.collection('Admins').document(uid)
         admin_doc = admin_ref.get()
 
         if admin_doc.exists:
             # User is an existing admin
             # Return the admin document directly
             admin_data = admin_doc.to_dict()
-            admin_data["role"] ="admin"
             return jsonify(admin_data), 200
 
-        # Step 3: Check if UID exists in the 'students' collection
+        # Step 3: Check if UID exists in the 'Students' collection
         student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
 
@@ -151,7 +150,6 @@ def login(*args, **kwargs):
             # Add role to the student data and return doc
             student_data = student_doc.to_dict()
             student_data["role"] = "student"
-            print(student_data)
             return jsonify(student_data), 200
 
         # Step 4: If UID is not in either collection, create a new student
@@ -169,12 +167,11 @@ def login(*args, **kwargs):
         }
         student_ref.set(new_student_data)
 
-        # Return the new student data directly (flattened)
+        # Return the new student data 
         return jsonify(new_student_data), 200
 
     except Exception as e:
         return jsonify({"error": "Login failed", "details": str(e)}), 500
-
 
 def verify_firebase_token(id_token): 
     #this is a normal function, that receives a parameter that should be the authentication token.
@@ -281,13 +278,13 @@ def add_admin(decoded_token):
         # Step 2: Get the UID associated with the email
         uid = get_uid_by_email(email)
         if uid is None:
-            # No UID found, create a document in pendingAdmins with email as document ID
+            # No UID found, create a document in pendingAdmins with the email as document ID
             pending_admin_ref = db.collection('pendingAdmins').document(email)
             pending_admin_ref.set({"email": email})
             return jsonify({"message": f"Admin pending creation for email: {email}"}), 200
 
         # Step 3: Check if the UID belongs to an admin or student
-        admin_ref = db.collection('Admins').document(uid)  # Using 'Admins' to match decorator
+        admin_ref = db.collection('Admins').document(uid)  
         admin_doc = admin_ref.get()
         if admin_doc.exists:
             return jsonify({"error": "Email already belongs to an admin"}), 400
@@ -295,16 +292,16 @@ def add_admin(decoded_token):
         student_ref = db.collection('Students').document(uid)
         student_doc = student_ref.get()
         if student_doc.exists:
-            # Retrieve name and email from the student document
+            # get his info 
             student_data = student_doc.to_dict()
             name = student_data.get('name')
             email = student_data.get('email')
 
-            # Validate that name and email exist in the student document
+            # make sure his data is not missing
             if not name or not email:
                 return jsonify({"error": "Student document missing name or email"}), 500
 
-            # Delete the student document
+            # Delete the student document, since he will become a new admin
             student_ref.delete()
 
             # Create a new admin document
@@ -327,7 +324,7 @@ def add_admin(decoded_token):
 def delete_admin(decoded_token):
     #Goal: delete a pending or existing admin.
     try:
-        # Step 1: Extract the email from the request body (JSON)
+        # Step 1: Extract the email 
         data = request.get_json()
         if not data or 'email' not in data:
             return jsonify({"error": "Email is missing in request body"}), 400
@@ -364,7 +361,7 @@ def delete_admin(decoded_token):
 def add_course(decoded_token):
     # NOTE GOAL: adding a course to the Courses collection
     try:
-        # Get data from the request (e.g., JSON payload)
+        # Get data from the request json body
         data = request.json
         if not data:
             return jsonify({"error": "No data provided"}), 400
@@ -403,7 +400,7 @@ def add_course(decoded_token):
         # Step 3: Create the course document
         course_data = {
             "department": department,
-            "course_number": int(course_number),  # Store as integer in Firestore
+            "course_number": int(course_number),  
             "course_name": course_name,
             "hours": hours,
             "prerequisites": prerequisites
@@ -418,26 +415,20 @@ def add_course(decoded_token):
 
 @app.route('/addCoursePre', methods=['POST'])
 @admin_required
-def add_course_prerequisite(decoded_token): # The admin_required decorator injects decoded_token
+def add_course_prerequisite(decoded_token): 
     """
-    Adds a prerequisite course ID to the 'prerequisites' array of a target course document
-    within the 'Courses' collection.
-    Requires admin privileges.
-    Expects JSON: {"course_id": "TARGET-COURSE-ID", "prerequisite": "PREREQ-COURSE-ID"}
-    Verifies that both courses exist and that adding this prerequisite does not create
-    a direct circular dependency (e.g., A requires B and B requires A).
-    Uses ArrayUnion for safe addition (won't add duplicates).
+    NOTE this functions adds a pre requuisite course to a course.
     """
-    course_id = None # Initialize for error logging
-    prerequisite_id = None # Initialize for error logging
+    course_id = None # Initialize values
+    prerequisite_id = None 
     try:
-        # --- 1. Get and Validate Input ---
+        # Step 1: get values
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
 
-        course_id = data.get('course_id')         # The course to add the prerequisite to (e.g., Course B)
-        prerequisite_id = data.get('prerequisite') # The course ID that is the prerequisite (e.g., Course A)
+        course_id = data.get('course_id')         # The course to add the prerequisite to (e.g., Course CPIT251)
+        prerequisite_id = data.get('prerequisite') # The course ID that is the prerequisite (e.g., Course CPIT250)
 
         # Basic validation
         if not course_id or not isinstance(course_id, str) or not course_id.strip():
@@ -447,52 +438,50 @@ def add_course_prerequisite(decoded_token): # The admin_required decorator injec
 
         course_id = course_id.strip()
         prerequisite_id = prerequisite_id.strip()
+        #this cleans the string from any whitespaces 
 
-        # Prevent a course from being its own prerequisite
+        # make sure that you can't add a course as a pre to itself
         if course_id == prerequisite_id:
              return jsonify({"error": "A course cannot be a prerequisite of itself"}), 400
 
-        # --- 2. Verify Both Courses Exist ---
-        # NOTE: Assumes 'Courses' is the correct collection name.
-        course_ref = db.collection('Courses').document(course_id)         # Ref for Course B
-        prereq_ref = db.collection('Courses').document(prerequisite_id) # Ref for Course A
+        # Step 2: make sure that both courses exists 
+        course_ref = db.collection('Courses').document(course_id)         # Ref for Course CPIT251
+        prereq_ref = db.collection('Courses').document(prerequisite_id) # Ref for Course CPIT250
 
-        course_doc = course_ref.get() # Doc for Course B
-        prereq_doc = prereq_ref.get() # Doc for Course A (the prerequisite being added)
+        course_doc = course_ref.get() # Doc for Course CPIT251
+        prereq_doc = prereq_ref.get() # Doc for Course CPIT250
 
         if not course_doc.exists:
              return jsonify({"error": f"Target course '{course_id}' not found in Courses collection"}), 404
         if not prereq_doc.exists:
              return jsonify({"error": f"Prerequisite course '{prerequisite_id}' not found in Courses collection"}), 400 # 400 Bad Request
 
-        # --- 2b. Check for Circular Dependency (NEW STEP) ---
-        # Check if Course B (course_id) is already a prerequisite for Course A (prerequisite_id)
+        # --- Step 3: Check if Course CPIT251 (course_id) is already a prerequisite for Course CPIT250 (prerequisite_id)
+        # as this would create a loop
         prereq_data = prereq_doc.to_dict()
-        prereqs_of_prereq = prereq_data.get('prerequisites', []) # Get Course A's prerequisites
+        prereqs_of_prereq = prereq_data.get('prerequisites', []) # Get Course CPIT250 prerequisites
         if isinstance(prereqs_of_prereq, list) and course_id in prereqs_of_prereq:
-            # If Course B is in Course A's prerequisites, adding A to B's prereqs would create a loop.
+            # if we enter here here , this means that 250 has 251 as a pre , and if we continue the function , there will be a loop , so we can't 
             return jsonify({
                 "error": f"Circular prerequisite detected: '{course_id}' is already listed as a prerequisite for '{prerequisite_id}'. Cannot add '{prerequisite_id}' as a prerequisite for '{course_id}'."
             }), 409 # 409 Conflict is appropriate here
 
-        # --- 3. Check Target Course's 'prerequisites' Field ---
+        # Step4 : validation for prerequisite list
         course_data = course_doc.to_dict()
         if 'prerequisites' in course_data and not isinstance(course_data.get('prerequisites'), list):
              return jsonify({"error": f"Field 'prerequisites' in course '{course_id}' exists but is not an array/list."}), 409 # 409 Conflict
 
-        # --- 4. Add Prerequisite using ArrayUnion ---
+        # Step 5 : add pre requisite course using arrayUnion which will only add unique values to a list, and is atomic
         # Prepare the update data.
         update_data = {
-            # Add prerequisite_id (Course A) to course_id's (Course B) list
+            # Add prerequisite_id (Course 250) to course_id's (Course 251) list
             'prerequisites': firestore.ArrayUnion([prerequisite_id])
-            # Optional: Update a 'last_modified' timestamp
-            # 'last_modified': datetime.now(timezone.utc)
         }
 
-        # Update the target course document (Course B)
+        # do the update
         course_ref.update(update_data)
 
-        # --- 5. Return Success Response ---
+        # Step 6 : return response 
         return jsonify({
             "message": f"Prerequisite '{prerequisite_id}' added to course '{course_id}' (or was already present)."
             }), 200 # 200 OK
@@ -506,20 +495,16 @@ def add_course_prerequisite(decoded_token): # The admin_required decorator injec
         # Return a generic server error message
         return jsonify({"error": "Failed to add course prerequisite due to an internal server error", "details": str(e)}), 500
 
-@app.route('/deleteCoursePre', methods=['POST']) # Using POST for consistency
+@app.route('/deleteCoursePre', methods=['POST']) 
 @admin_required
-def delete_course_prerequisite(decoded_token): # The admin_required decorator injects decoded_token
+def delete_course_prerequisite(decoded_token): 
     """
-    Deletes a prerequisite course ID from the 'prerequisites' array of a target course document
-    within the 'Courses' collection.
-    Requires admin privileges.
-    Expects JSON: {"course_id": "TARGET-COURSE-ID", "prerequisite_id": "PREREQ-TO-DELETE-ID"}
-    Uses ArrayRemove for safe removal. Checks if prerequisite exists before removal.
+    NOTE this functions deletes a prerequisite course from a course's prerequisite list
     """
-    course_id = None # Initialize for error logging
-    prerequisite_id_to_delete = None # Initialize for error logging
+    course_id = None # Initialize values
+    prerequisite_id_to_delete = None 
     try:
-        # --- 1. Get and Validate Input ---
+        # Step 1: get data and validate
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
@@ -536,19 +521,18 @@ def delete_course_prerequisite(decoded_token): # The admin_required decorator in
         course_id = course_id.strip()
         prerequisite_id_to_delete = prerequisite_id_to_delete.strip()
 
-        # --- 2. Verify Target Course Exists ---
-        # NOTE: Assumes 'Courses' is the correct collection name.
+        # Step 2 : make sure courses exist
         course_ref = db.collection('Courses').document(course_id)
         course_doc = course_ref.get()
 
         if not course_doc.exists:
              return jsonify({"error": f"Target course '{course_id}' not found in Courses collection"}), 404
 
-        # --- 3. Check if Prerequisite Exists in the List ---
+        # Step : 3 Check if Prerequisite Exists in the List 
         course_data = course_doc.to_dict()
         current_prereqs = course_data.get('prerequisites', [])
 
-        # Ensure the prerequisites field is actually a list
+        # make sure the field is a list
         if not isinstance(current_prereqs, list):
              return jsonify({"error": f"Field 'prerequisites' in course '{course_id}' is not an array/list."}), 409 # Conflict
 
@@ -558,20 +542,16 @@ def delete_course_prerequisite(decoded_token): # The admin_required decorator in
                  "error": f"Prerequisite '{prerequisite_id_to_delete}' not found in the prerequisites list for course '{course_id}'."
              }), 404 # Not Found
 
-        # --- 4. Remove Prerequisite using ArrayRemove ---
+        # Step 4:  Remove Prerequisite using ArrayRemove ---
         # Prepare the update data. ArrayRemove handles removing the specific element.
         update_data = {
             'prerequisites': firestore.ArrayRemove([prerequisite_id_to_delete]),
-            # Optional: Update a 'last_modified' timestamp
             'last_modified': datetime.now(timezone.utc)
         }
 
         # Update the target course document
         course_ref.update(update_data)
 
-        # --- 5. Return Success Response ---
-        # Note: ArrayRemove succeeds even if the item wasn't present,
-        # but we added an explicit check above (Step 3) for better feedback.
         return jsonify({
             "message": f"Prerequisite '{prerequisite_id_to_delete}' removed successfully from course '{course_id}'."
             }), 200 # 200 OK
@@ -616,21 +596,16 @@ def get_courses(decoded_token):
 def add_plan(decoded_token):
     """
     Creates a new plan document in the 'Plans' collection using the plan name as the key.
-    Requires admin privileges.
-    Expects JSON: {"plan_name": "PLAN_NAME", "levels": NUMBER_OF_LEVELS, "required_hours": TOTAL_HOURS}
-    Initializes the plan with a 'levels' map containing empty lists for each numbered level
-    (e.g., "Level 1": [], "Level 2": [], ...) AND an additional "Extra" level.
-    Also saves the total required hours for the plan.
     """
     try:
-        # --- 1. Get and Validate Input ---
+        # Step 1: get and validate data
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
 
         plan_name = data.get('plan_name')
         num_levels = data.get('levels') # Get the number of levels
-        required_hours = data.get('required_hours') # Get the required hours (NEW)
+        required_hours = data.get('required_hours') 
 
         # Basic validation for plan_name
         if not plan_name or not isinstance(plan_name, str) or not plan_name.strip():
@@ -643,7 +618,7 @@ def add_plan(decoded_token):
              print(f"Invalid num_levels received: {num_levels}") # Added print for debugging
              return jsonify({"error": "'levels' must be a positive integer"}), 400
 
-        # --- Validation for required_hours (NEW) ---
+        # validation for hours
         if required_hours is None:
              return jsonify({"error": "Missing 'required_hours' attribute in request body"}), 400
         if not isinstance(required_hours, int) or required_hours <= 0:
@@ -653,12 +628,12 @@ def add_plan(decoded_token):
         # Use stripped name as the document ID
         plan_name = plan_name.strip()
 
-        # --- 2. Check for Existing Plan ---
+        # Step 2: Check for Existing Plan 
         plan_ref = db.collection('Plans').document(plan_name)
         if plan_ref.get().exists:
             return jsonify({"error": f"Plan '{plan_name}' already exists"}), 409
 
-        # --- 3. Create New Plan Document with Levels + Extra + Required Hours ---
+        # Step 3: Create New Plan Document 
         last_updated_date = datetime.now(timezone.utc)
         plan_data = {
             'last_update_date': last_updated_date,
@@ -677,8 +652,7 @@ def add_plan(decoded_token):
         # Set the data in Firestore, creating the document
         plan_ref.set(plan_data)
 
-        # --- 4. Return Success Response ---
-        # Includes fields added in the user's provided snippet
+        # Step 4: Return Success Response 
         return jsonify({
             "message": f"Plan '{plan_name}' created successfully with {num_levels} numbered levels, an 'Extra' level, and {required_hours} required hours.",
             "plan_name": plan_name,
@@ -695,16 +669,12 @@ def add_plan(decoded_token):
 
 @app.route('/addPlanLevel', methods=['POST'])
 @admin_required
-def add_plan_level(decoded_token): # The admin_required decorator injects decoded_token
+def add_plan_level(decoded_token): 
     """
     Adds a new level (as an empty list attribute) to an existing plan document in the 'Plans' collection.
-    Requires admin privileges.
-    Expects a JSON body like: {"plan_name": "My Existing Plan", "level_number": 1}
-    Constructs the Firestore key as "Level {level_number}".
-    Updates the 'last_update_date' field of the plan.
     """
     try:
-        # --- 1. Get and Validate Input ---
+        # Step 1: Get and Validate data  
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
@@ -723,25 +693,24 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
              return jsonify({"error": "'level_number' must be a positive integer"}), 400
 
         plan_name = plan_name.strip()
-        # Construct the key name (e.g., "Level 1", "Level 2") from the number
+        # Construct the key name (e.g., "Level 1") from the number
         level_key = f"Level {level_number}"
 
-        # --- 2. Check if Plan Exists ---
+        # Step 2: Check if Plan Exists 
         plan_ref = db.collection('Plans').document(plan_name)
         plan_doc = plan_ref.get()
 
         if not plan_doc.exists:
             return jsonify({"error": f"Plan '{plan_name}' not found"}), 404 # 404 Not Found
 
-        # --- 3. Check if Level Key Already Exists ---
+        # Step 3: Check if Level Key Already Exists 
         plan_data = plan_doc.to_dict()
         # Check using the constructed key (e.g., "Level 1")
         if level_key in plan_data.get('levels', {}): # Check within the 'levels' map
             return jsonify({"error": f"Level '{level_key}' already exists in plan '{plan_name}'"}), 409 # 409 Conflict
 
-        # --- 4. Add New Level Key and Update Timestamp ---
-        # Prepare the data to update: new level key within the 'levels' map
-        # Use dot notation for updating nested fields
+        # Step 4: Add New Level Key and Update Timestamp 
+        # Prepare the data to update
         update_data = {
             f'levels.{level_key}': [], # Add the new level field within the 'levels' map
             'last_update_date': datetime.now(timezone.utc) # Update the timestamp
@@ -750,7 +719,7 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
         # Update the document in Firestore
         plan_ref.update(update_data)
 
-        # --- 5. Return Success Response ---
+        # Step 5: Return Success Response 
         return jsonify({
             "message": f"Level '{level_key}' added successfully to plan '{plan_name}'"
             }), 200 # 200 OK for successful update
@@ -763,21 +732,15 @@ def add_plan_level(decoded_token): # The admin_required decorator injects decode
 
 @app.route('/addCourseToPlanLevel', methods=['POST'])
 @admin_required
-def add_course_to_plan_level(decoded_token): # The admin_required decorator injects decoded_token
+def add_course_to_plan_level(decoded_token):
     """
-    Adds a course ID to the array associated with a specific level within a plan document's 'levels' map.
-    If the course already exists in a different level within the same plan, it is removed
-    from the old level first (effectively moving the course).
-    Requires admin privileges.
-    Expects JSON: {"plan_name": "PlanName", "level_identifier": LEVEL_NUMBER | "Extra", "course_id": "COURSE-ID"}
-    Updates the 'last_update_date' field of the plan.
-    Uses ArrayUnion/ArrayRemove for safe operations.
+    NOTE goal add course to a plan level
     """
-    plan_name = None # Initialize for error logging
-    level_identifier = None # Initialize for error logging
-    course_id = None # Initialize for error logging
+    plan_name = None # Initialize data
+    level_identifier = None 
+    course_id = None 
     try:
-        # --- 1. Get and Validate Input ---
+        # Step 1: Get and Validate data
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
@@ -806,12 +769,12 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         else:
             return jsonify({"error": "'level_identifier' must be a positive integer or the string 'Extra'"}), 400
 
-        # --- 2. Check if Course to Add Exists ---
+        # Step 2: Check if Course exists 
         course_ref = db.collection('Courses').document(course_id)
         if not course_ref.get().exists:
              return jsonify({"error": f"Course '{course_id}' not found in Courses collection"}), 404
 
-        # --- 3. Check if Plan and Target Level Key Exist ---
+        # Step 3: Check if Plan and Target Level Key Exist 
         plan_ref = db.collection('Plans').document(plan_name)
         plan_doc = plan_ref.get()
 
@@ -827,7 +790,7 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         if not isinstance(levels_map.get(target_level_key), list):
              return jsonify({"error": f"Target field for level '{target_level_key}' in plan '{plan_name}' is not an array/list."}), 400
 
-        # --- 3b. Check if Course Exists in ANOTHER Level (NEW STEP) ---
+        # Step 4: Check if Course Exists in ANOTHER Level 
         old_level_key = None
         for key, value_list in levels_map.items():
             # Check if it's a different level, is a list, and contains the course
@@ -836,11 +799,11 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
                 print(f"INFO: Course '{course_id}' found in existing level '{old_level_key}'. Will move to '{target_level_key}'. E:101")
                 break # Found it, no need to check further
 
-        # --- 4. Prepare Update Payload (Handles Add or Move) ---
+        # Step 5: Prepare Update Payload 
         update_data = {}
         message = ""
         frontEndMessage = ""
-        # Always add to the target level (ArrayUnion handles duplicates if already there)
+        # Always add to the target level 
         update_data[f'levels.{target_level_key}'] = firestore.ArrayUnion([course_id])
 
         # If found in an old level, also remove it from there
@@ -860,11 +823,11 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         # Always update the timestamp
         update_data['last_update_date'] = datetime.now(timezone.utc)
 
-        # --- 5. Update the Document ---
+        # Step 6: Update the Document 
         # Perform add and potential remove in one atomic operation
         plan_ref.update(update_data)
 
-        # --- 6. Return Success Response ---
+        # Step 7: Return Success Response 
         return jsonify({"message": message, "frontEndMessage":frontEndMessage,"old_level_key":old_level_key}), 200 # 200 OK
 
     except Exception as e:
@@ -878,27 +841,24 @@ def add_course_to_plan_level(decoded_token): # The admin_required decorator inje
         return jsonify({"error": "Failed to add/move course in plan level due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getPlans', methods=['GET'])
-@admin_required # Using admin_required as provided in the prompt
-def get_plans(decoded_token): # admin_required provides decoded_token
+@admin_required 
+def get_plans(decoded_token): 
     """
-    Retrieves a list of all available plans from the 'Plans' collection.
-    Requires admin authentication.
-    Returns a JSON list containing each plan's ID and its data.
-    The 'levels' map within each plan's data is sorted numerically
-    with 'Extra' appearing last in the returned JSON.
+    return a list of all plans from the plans collection
     """
     try:
-        # --- 1. Query the Plans Collection ---
+        # Step 1: Query the Plans Collection 
         plans_ref = db.collection('Plans')
         plans_stream = plans_ref.stream() # Get an iterator for all plan documents
 
-        # --- 2. Format the Plans Data (with sorted levels) ---
+        # Step 2: Format the Plans Data (with sorted levels) 
+        #firestore levels map isn't sorted, so we need to sort them
         plans_list = []
         for doc in plans_stream:
             plan_id = doc.id
             plan_data = doc.to_dict()
 
-            # --- Sort the 'levels' map (NEW) ---
+            # --- Sort the 'levels' map 
             levels_map = plan_data.get('levels', {})
             if isinstance(levels_map, dict): # Proceed only if it's a dictionary
 
@@ -906,11 +866,11 @@ def get_plans(decoded_token): # admin_required provides decoded_token
                 def sort_level_key(key):
                     if isinstance(key, str):
                         if key.strip().lower() == 'extra':
-                            return (float('inf'), key) # Ensure 'Extra' comes absolutely last
+                            return (float('inf')) # Ensure 'Extra' comes absolutely last
                         if key.startswith('Level ') and key.split(' ')[1].isdigit():
-                            return (int(key.split(' ')[1]), key) # Sort by number first
+                            return (int(key.split(' ')[1])) # Sort by number first
                     # Handle unexpected keys gracefully - place them before 'Extra'
-                    return (float('inf') - 1, key)
+                    return (float('inf') - 1)
 
                 try:
                     # Sort keys based on the defined function
@@ -934,7 +894,7 @@ def get_plans(decoded_token): # admin_required provides decoded_token
             }
             plans_list.append(plan_entry)
 
-        # --- 3. Return the Response ---
+        # Step 3: Return the Response 
         return jsonify({"plans": plans_list}), 200
 
     except Exception as e:
@@ -946,18 +906,12 @@ def get_plans(decoded_token): # admin_required provides decoded_token
 
 @app.route('/addForm', methods=['POST'])
 @admin_required
-def add_form(decoded_token): # admin_required provides decoded_token
+def add_form(decoded_token): 
     """
-    Adds a new form document to the 'Forms' collection with a sequential numeric ID.
-    Requires admin privileges.
-    Expects JSON: {"title": "...", "description": "...", "start_date": "YYYY-MM-DD",
-                   "end_date": "YYYY-MM-DD", "plan": "PLAN_ID",
-                   "max_hours": NUMBER, "max_graduate_hours": NUMBER,
-                   "expected_students": NUMBER}
-    Initializes 'Form_Responses' map and 'responses' counter to 0.
+    add a new form to the forms collection
     """
     try:
-        # --- 1. Get and Validate Input ---
+        # Step 1: Get and Validate data
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
@@ -1008,8 +962,7 @@ def add_form(decoded_token): # admin_required provides decoded_token
         if not plan_ref.get().exists:
              return jsonify({"error": f"Associated plan '{plan_id}' not found"}), 404
 
-        # --- 2. Generate Sequential ID ---
-        # WARNING: This method can be inefficient and prone to race conditions.
+        # Step 2: Generate Sequential ID 
         forms_ref = db.collection('Forms')
         forms_stream = forms_ref.stream()
         max_id = 0
@@ -1024,7 +977,7 @@ def add_form(decoded_token): # admin_required provides decoded_token
         new_form_id = max_id + 1
         new_form_id_str = str(new_form_id) # Use string representation
 
-        # --- 3. Prepare Form Data ---
+        # Step 3: Prepare Form Data 
         form_data = {
             "title": title,
             "description": description,
@@ -1039,7 +992,7 @@ def add_form(decoded_token): # admin_required provides decoded_token
             "created_at": datetime.now(timezone.utc)
         }
 
-        # --- 4. Create New Form Document ---
+        # Step 4: Create New Form Document 
         form_doc_ref = forms_ref.document(new_form_id_str)
         form_doc_ref.set(form_data)
 
@@ -1056,24 +1009,20 @@ def add_form(decoded_token): # admin_required provides decoded_token
         return jsonify({"error": "Failed to add form due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getForms', methods=['GET'])
-@admin_required # Using admin_required as provided in the prompt
-def get_forms(decoded_token): # admin_required provides decoded_token
+@admin_required 
+def get_forms(decoded_token): 
     """
-    Retrieves a list of all available forms from the 'Forms' collection.
-    Requires admin authentication.
-    Returns a JSON list containing each form's ID and its data
-    (including title, description, dates, plan_id, max_hours, max_graduate_hours, etc.),
-    EXCLUDING the 'Form_Responses' field.
+    Retrieves a list of all available forms from the 'Forms' collection. excluding the form responses
     """
     try:
-        # --- 1. Query the Forms Collection ---
+        # Step 1: Query the Forms Collection 
         forms_ref = db.collection('Forms')
         forms_stream = forms_ref.stream() # Get an iterator for all form documents
 
-        # --- 2. Format the Forms Data (excluding responses) ---
+        # Step 2: Format the Forms Data (excluding responses) 
         forms_list = []
         for doc in forms_stream:
-            # Get the document ID (e.g., "1", "2", "3"...)
+            # Get the document ID 
             form_id = doc.id
             # Get the document data dictionary
             form_data = doc.to_dict()
@@ -1092,7 +1041,7 @@ def get_forms(decoded_token): # admin_required provides decoded_token
             }
             forms_list.append(form_entry)
 
-        # --- 3. Return the Response ---
+        # Step 3: return the response
         # Return the list of forms (without responses), even if it's empty
         return jsonify({"forms": forms_list}), 200
 
@@ -1102,21 +1051,15 @@ def get_forms(decoded_token): # admin_required provides decoded_token
         # Return a generic server error message
         return jsonify({"error": "Failed to retrieve forms due to an internal server error", "details": str(e)}), 500
 
-@app.route('/editForm', methods=['PATCH']) # Using PATCH for partial updates
+@app.route('/editForm', methods=['PATCH']) 
 @admin_required
-def edit_form(decoded_token): # admin_required provides decoded_token (though not used here)
+def edit_form(decoded_token): 
     """
     Updates specific fields (title, description, start_date, end_date, etc.) of an existing form.
-    Requires admin privileges.
-    Expects JSON containing 'form_id' and at least one field to update:
-    {"form_id": "FORM_ID", "title": "New Title", "end_date": "YYYY-MM-DD", ...}
-    Only updates the fields provided in the request.
-    Validates that if both start_date and end_date are updated, end_date >= start_date.
-    Adds a 'last_modified' timestamp.
     """
-    form_id = None # Initialize for error logging
+    form_id = None # Initialize data
     try:
-        # --- 1. Get and Validate Input ---
+        # Step 1: Get and Validate data
         data = request.get_json()
         if not data:
              return jsonify({"error": "Missing JSON request body"}), 400
@@ -1128,17 +1071,17 @@ def edit_form(decoded_token): # admin_required provides decoded_token (though no
             return jsonify({"error": "Missing or invalid 'form_id' (must be a non-empty string)"}), 400
         form_id = form_id.strip()
 
-        # --- 2. Check if Form Exists ---
+        # Step 2: Check if Form Exists 
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
         if not form_doc.exists:
              return jsonify({"error": f"Form with ID '{form_id}' not found"}), 404
 
-        # --- 3. Prepare Update Data ---
+        # Step 3: Prepare Update Data 
         update_data = {}
         # Include all fields that can be edited now
         allowed_fields = ["title", "description", "start_date", "end_date",
-                          "max_hours", "max_graduate_hours", "expected_students"] # Added hour/student fields
+                          "max_hours", "max_graduate_hours", "expected_students"] 
         found_update = False
 
         # Process optional fields
@@ -1217,10 +1160,10 @@ def edit_form(decoded_token): # admin_required provides decoded_token (though no
         # Add a timestamp for the modification
         update_data['last_modified'] = datetime.now(timezone.utc)
 
-        # --- 4. Perform Update ---
+        # Step 4: Perform Update 
         form_ref.update(update_data)
 
-        # --- 5. Return Success Response ---
+        # Step 5: Return Success Response 
         return jsonify({"message": f"Form '{form_id}' updated successfully"}), 200
 
     except Exception as e:
@@ -1236,11 +1179,9 @@ def edit_form(decoded_token): # admin_required provides decoded_token (though no
 def delete_form(decoded_token):
     """
     Deletes a specific form document from the 'Forms' collection.
-    Requires admin authentication.
-    Expects the form_id in the JSON request body: {"form_id": "FORM_ID"}
     """
     try:
-        # --- 1. Get form_id from JSON Request Body ---
+        # Step 1: Get form_id from request and validate
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1252,7 +1193,7 @@ def delete_form(decoded_token):
         form_id = form_id.strip()
         # --- End form_id retrieval ---
 
-        # --- 2. Get Document Reference and Check Existence ---
+        # Step 2: Get Document Reference and Check Existence ---
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
 
@@ -1260,11 +1201,10 @@ def delete_form(decoded_token):
              # If the document doesn't exist, return 404 Not Found
              return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
-        # --- 3. Delete the Document ---
+        # Step 3: Delete the Document ---
         form_ref.delete()
 
-        # --- 4. Return Success Response ---
-        # Return 200 OK on successful deletion
+        # Step 4: Return Success Response ---
         return jsonify({"message": f"Form '{form_id}' deleted successfully"}), 200
 
     except Exception as e:
@@ -1278,24 +1218,22 @@ def delete_form(decoded_token):
 @admin_required 
 def delete_plan(decoded_token):
     """
-    Deletes a specific form document from the 'Plans' collection.
-    Requires admin authentication.
-    Expects the plan_id in the JSON request body: {"plan_id": "PLAN_ID"}
+    Deletes a specific plan document from the 'Plans' collection.
     """
     try:
-        # --- 1. Get form_id from JSON Request Body ---
+        # Step 1: Get plan_id from request and validate 
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
         plan_id = data.get('plan_id')
 
-        # Validate form_id
+        # Validate plan_id
         if not plan_id or not isinstance(plan_id, str) or not plan_id.strip():
-            return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
+            return jsonify({"error": "Missing or invalid 'plan_id' in request body"}), 400
         plan_id = plan_id.strip()
         # --- End form_id retrieval ---
 
-        # --- 2. Get Document Reference and Check Existence ---
+        # Step 2: Get Document Reference and Check Existence ---
         plan_ref = db.collection('Plans').document(plan_id)
         plan_doc = plan_ref.get()
 
@@ -1303,11 +1241,10 @@ def delete_plan(decoded_token):
              # If the document doesn't exist, return 404 Not Found
              return jsonify({"error": f"plan '{plan_id}' not found"}), 404
 
-        # --- 3. Delete the Document ---
+        # Step 3: Delete the Document ---
         plan_ref.delete()
 
         # --- 4. Return Success Response ---
-        # Return 200 OK on successful deletion
         return jsonify({"message": f"plan '{plan_id}' deleted successfully"}), 200
 
     except Exception as e:
@@ -1317,17 +1254,14 @@ def delete_plan(decoded_token):
         # Return a generic server error message
         return jsonify({"error": "Failed to delete form due to an internal server error", "details": str(e)}), 500
 
-@app.route('/deleteCourseFromPlan', methods=['POST']) # Using POST for consistency
+@app.route('/deleteCourseFromPlan', methods=['POST']) 
 @admin_required
 def delete_course_from_plan(decoded_token):
     """
     Deletes a specific course_id from a level's list within a plan document.
-    Requires admin authentication.
-    Expects JSON: {"plan_id": "PLAN_ID", "level_identifier": LEVEL_NUMBER | "Extra", "course_id": "COURSE_ID_TO_DELETE"}
-    Uses ArrayRemove for safe removal. Updates 'last_update_date'.
     """
     try:
-        # --- 1. Get Input from JSON Request Body ---
+        # Step 1: Get data from request body
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1356,14 +1290,14 @@ def delete_course_from_plan(decoded_token):
         else:
             return jsonify({"error": "'level_identifier' must be a positive integer or the string 'Extra'"}), 400
 
-        # --- 2. Get Plan Document Reference and Check Existence ---
+        # Step 2: Get Plan Document Reference and Check Existence 
         plan_ref = db.collection('Plans').document(plan_id)
         plan_doc = plan_ref.get()
 
         if not plan_doc.exists:
              return jsonify({"error": f"Plan '{plan_id}' not found"}), 404
 
-        # --- 3. Check if Level and Course Exist within the Plan ---
+        # Step 3: Check if Level and Course Exist within the Plan ---
         plan_data = plan_doc.to_dict()
         levels_map = plan_data.get('levels', {})
 
@@ -1376,17 +1310,16 @@ def delete_course_from_plan(decoded_token):
         if course_id_to_delete not in levels_map.get(level_key, []):
              return jsonify({"error": f"Course '{course_id_to_delete}' not found in level '{level_key}' of plan '{plan_id}'."}), 404
 
-        # --- 4. Prepare Update Payload with ArrayRemove ---
+        # Step 4: Prepare Update Payload 
         update_payload = {
-            # Use dot notation and ArrayRemove to remove the specific course ID
             f'levels.{level_key}': firestore.ArrayRemove([course_id_to_delete]),
             'last_update_date': datetime.now(timezone.utc) # Update timestamp
         }
 
-        # --- 5. Update the Document ---
+        # Step 5: Update the Document 
         plan_ref.update(update_payload)
 
-        # --- 6. Return Success Response ---
+        # Step 6: Return Success Response 
         return jsonify({
             "message": f"Course '{course_id_to_delete}' deleted successfully from level '{level_key}' in plan '{plan_id}'."
         }), 200
@@ -1408,14 +1341,10 @@ def delete_course_completely(decoded_token):
     """
     Deletes a course document from 'Courses' collection AND removes all references
     to it from the 'levels' maps within all 'Plans' documents.
-    Requires admin authentication.
-    Expects course_id in the JSON request body: {"course_id": "COURSE_ID"}
-    Checks if the course is a prerequisite for others before deleting.
-    NOTE: Using POST for deletion is less conventional than DELETE with ID in URL.
     """
-    course_id = None # Initialize for error logging
+    course_id = None # Initialize data
     try:
-        # --- 1. Get course_id from JSON Request Body ---
+        # Step 1: Get course_id from request
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1428,13 +1357,13 @@ def delete_course_completely(decoded_token):
         # --- End course_id retrieval ---
 
 
-        # --- 2. Verify Target Course Exists ---
+        # Step 2: Verify Target Course Exists 
         course_ref = db.collection('Courses').document(course_id)
         course_doc = course_ref.get()
         if not course_doc.exists:
              return jsonify({"error": f"Course '{course_id}' not found"}), 404
 
-        # --- 3. Check if Course is a Prerequisite for Other Courses ---
+        # Step 3: Check if Course is a Prerequisite for Other Courses 
         dependent_courses_query = db.collection('Courses').where('prerequisites', 'array_contains', course_id).limit(1).stream()
         dependent_courses = list(dependent_courses_query)
         if dependent_courses:
@@ -1443,7 +1372,7 @@ def delete_course_completely(decoded_token):
                 "error": f"Cannot delete course '{course_id}' because it is listed as a prerequisite for other course(s) (e.g., '{dependent_course_id}'). Please remove dependencies first."
             }), 409 # 409 Conflict
 
-        # --- 4. Prepare Batch Update for Plans ---
+        # Step 4: Prepare Batch Update for Plans 
         batch = db.batch()
         plans_ref = db.collection('Plans')
         plans_stream = plans_ref.stream()
@@ -1466,21 +1395,21 @@ def delete_course_completely(decoded_token):
                  # Add timestamp update only if other fields are updated
                  update_payload['last_update_date'] = firestore.SERVER_TIMESTAMP # Use server timestamp
                  # Add the update operation for this plan to the batch
-                 batch.update(plan_doc.reference, update_payload) # Selected code was here
+                 batch.update(plan_doc.reference, update_payload) #add the update to the batch
                  plans_to_update = True # Mark that at least one plan was modified
 
-        # --- 5. Commit Batch Plan Updates (if any) ---
+        # Step 5: Commit Batch Plan Updates 
         if plans_to_update:
             print(f"INFO: Removing course '{course_id}' references from one or more plans.")
             batch.commit() # Atomically update all affected plans
             print(f"INFO: Plan updates committed for course '{course_id}'.")
 
 
-        # --- 6. Delete the Course Document Itself ---
+        # Step 6: Delete the Course Document 
         course_ref.delete()
         print(f"INFO: Course document '{course_id}' deleted.")
 
-        # --- 7. Return Success Response ---
+        # Step 7: Return Success Response 
         return jsonify({"message": f"Course '{course_id}' and all its references in plans deleted successfully"}), 200
 
     except Exception as e:
@@ -2983,161 +2912,7 @@ def add_form_response(decoded_token):
 
 #Other functions (niche,useless,etc) _______________
 
-
-@app.route('/addStudent-testing', methods=['POST'])
-def add_Student_testing():
-    #route for adding a Student document to the Students collections by using the id given 
-    #this route isn't protected, this is for testing purposes. NOTE its temporary
-    try:
-        # Get data from the request (e.g., JSON payload)
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        StudentID = data.get("Student_ID") #extracts the id key value
-        # Add data to Firestore
-        db.collection('Students').document(StudentID).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-
-@app.route('/addStudentggg', methods=['POST'])
-@admin_required
-def add_Student(decoded_token):#Kind of useless
-    #route for adding a Student document to the Students collections by using the id given 
-    
-    try:
-        # Get data from the request (e.g., JSON payload)
-        data = request.json
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        StudentID = data.get("Student_ID") #extracts the id key value
-        # Add data to Firestore
-        db.collection('Students').document(StudentID).set(data)  # goes to the collection - make reference to a document with the name of the id - then set its data to the json body received, note: is there is no document it will create one.
-        return jsonify({"message": "Data added successfully!"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/testLlMPrompt', methods=['POST'])
-def test_llm_prompt():
-    """
-    Sends a given text prompt directly to a Generative AI model using the
-    client structure seen in some documentation examples.
-    Returns the raw text response. For testing/debugging prompts.
-    Expects JSON: {"prompt": "Your prompt text here"}
-    WARNING: This structure might require the 'google-cloud-aiplatform' library
-             and potentially different authentication (ADC).
-    """
-    prompt_text = None # Initialize for error logging
-    model_name = None # Initialize for error logging
-    try:
-        # --- 1. Get Prompt from JSON Body ---
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Missing JSON request body"}), 400
-        prompt_text = data.get('prompt')
-
-        if not prompt_text or not isinstance(prompt_text, str) or not prompt_text.strip():
-            return jsonify({"error": "Missing or invalid 'prompt' text in request body"}), 400
-        prompt_text = prompt_text.strip()
-        # --- End prompt retrieval ---
-
-        # --- 2. Call External LLM API (Using Client structure from image) ---
-        print("--- PREPARING TO CALL LLM API (Test Function - Client Method) ---")
-
-        llm_response_text = None # Initialize
-        try:
-            # *** Attempting import and client structure from documentation image ***
-            # This might fail if the correct library (potentially google-cloud-aiplatform)
-            # is not installed, or if 'google' doesn't have 'genai' structured this way.
-            from google import genai
-
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
-                raise ValueError("GEMINI_API_KEY environment variable not set.")
-
-            # Initialize client as shown in the image
-            # This might raise an AttributeError if 'genai' doesn't have 'Client'
-            print("--- Initializing genai.Client ---")
-            client = genai.Client(api_key=api_key)
-
-            # Using a known recent model name compatible with newer APIs
-            model_name = 'gemini-2.0-flash'
-            # model_name = 'gemini-2.0-flash' # As shown in image, might not exist
-            print(f"--- Using Model: {model_name} ---")
-            print(f"--- SENDING PROMPT TO LLM API (Test Function - Client Method) ---")
-
-            # Calling generate_content via client.models as shown in image
-            # This might raise an AttributeError if client has no 'models' or models has no 'generate_content'
-            # The parameter name might also be 'prompt' instead of 'contents' depending on library/version
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt_text # Parameter name from image
-                # Safety settings might be passed differently here, check specific library docs if needed
-            )
-            print("--- LLM RESPONSE RECEIVED (Test Function - Client Method) ---")
-
-            # Get the raw text response (assuming response.text exists)
-            llm_response_text = response.text
-
-
-        except ImportError as imp_err:
-             print(f"ImportError: {imp_err}")
-             print("Could not import 'genai' from 'google'.")
-             print("You might need to install 'google-cloud-aiplatform': pip install google-cloud-aiplatform")
-             traceback.print_exc()
-             return jsonify({"error": "ImportError: Required library structure not found. Try installing 'google-cloud-aiplatform'.", "details": str(imp_err)}), 500
-        except AttributeError as attr_err:
-             print(f"AttributeError calling API: {attr_err}")
-             print("This likely means the code structure (genai.Client or client.models.generate_content) does not match the installed library.")
-             print("Consider switching back to the 'google.generativeai' library structure or ensuring 'google-cloud-aiplatform' is installed and used correctly.")
-             traceback.print_exc()
-             return jsonify({"error": "AttributeError: Library structure mismatch.", "details": str(attr_err)}), 500
-        except Exception as api_e:
-            # General error handling, including API key / model not found issues
-            print(f"Error calling Generative AI API: {api_e}")
-            traceback.print_exc()
-            error_detail = str(api_e)
-            status_code = 503
-            if "API key not valid" in error_detail:
-                 error_message = "AI service authentication failed. Check API key or try Application Default Credentials."
-            elif "is not found" in error_detail or "is not supported" in error_detail or "permission" in error_detail.lower():
-                 error_message = f"Model name/version '{model_name}' not found, not supported, or permission denied. Check model name or authentication (API Key / ADC)."
-            else:
-                 error_message = "Failed to get response from AI service."
-            return jsonify({"error": error_message, "details": error_detail}), status_code
-
-        if llm_response_text is None:
-             # May occur if API returns success but no text, or blocked content
-             try:
-                  # Attempt to access potential safety feedback (structure might differ)
-                  feedback = getattr(response, 'prompt_feedback', None)
-                  if feedback and getattr(feedback, 'block_reason', None):
-                       block_reason = feedback.block_reason.name
-                       print(f"LLM call blocked due to safety settings: {block_reason}")
-                       return jsonify({"error": f"Request blocked by AI safety filters: {block_reason}"}), 400
-             except Exception:
-                  pass # Ignore if feedback structure is different or missing
-             return jsonify({"error": "Failed to get response text from AI service (API call succeeded but no text found)."}), 503
-        # --- End API Call Block ---
-
-        # --- 3. Return Raw LLM Response ---
-        return jsonify({
-            "prompt_sent_length": len(prompt_text),
-            "llm_response": llm_response_text
-        }), 200
-
-    except Exception as e:
-        print(f"Error in /testLlMPrompt: {e}")
-        traceback.print_exc()
-        return jsonify({"error": "Failed to process test prompt due to an internal server error", "details": str(e)}), 500
-
 #End of Other functions (niche,useless,etc) _______________
-
-
-
 
 if __name__ == '__main__': #this starts the flask application
     app.run(debug=True)    
