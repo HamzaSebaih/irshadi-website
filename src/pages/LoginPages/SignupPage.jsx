@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate, Link } from "react-router";
-import { getAuth, signInWithPopup, GoogleAuthProvider, sendEmailVerification,updateProfile  } from "firebase/auth";
+import { getAuth, signInWithPopup, GoogleAuthProvider, sendEmailVerification } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
@@ -16,16 +16,16 @@ const SignupPage = () => {
     confirmPassword: "",
   });
 
-  const [passwordVisible, setPasswordVisible] = useState(false);
-  const [notifications, setNotifications] = useState({ type: "", msg: "" });
-  const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [message, setMessage] = useState({ type: "", msg: "" });
+  const [error, setError] = useState({});
   const [termsChecked, setTermsChecked] = useState(false);
 
   const { signup, logout } = useAuth();
   const navigate = useNavigate();
 
   const auth = getAuth();
-  const provider = new GoogleAuthProvider();
+  const googleAuth = new GoogleAuthProvider();
 
   const validateEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -43,7 +43,7 @@ const SignupPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setNotifications({ type: "", msg: "" });
+    setMessage({ type: "", msg: "" });
     const validation = {};
 
     if (!userInfo.firstName.trim()) validation.firstName = "First name is required.";
@@ -72,7 +72,7 @@ const SignupPage = () => {
       validation.terms = "You must agree on terms.";
     }
 
-    setErrors(validation);
+    setError(validation);
 
     if (Object.keys(validation).length) return;
 
@@ -80,31 +80,28 @@ const SignupPage = () => {
       const res = await signup(userInfo.email, userInfo.password);
       console.log("Signup success, sending email verification...");
       await sendEmailVerification(res.user);
-      await updateProfile(res.user, {
-        displayName: `${userInfo.firstName} ${userInfo.lastName}`,
-      });
       await logout();
 
-      setNotifications({ type: "success", msg: "Check your inbox to verify your email!" });
+      setMessage({ type: "success", msg: "Check your inbox to verify your email!" });
       setTimeout(() => navigate("/LoginPage"), 3000);
     } catch (err) {
       console.error("Signup went wrong:", err);
       const customMsg = err.code === "auth/email-already-in-use"
         ? "This email is taken."
         : `Something went wrong: ${err.message}`;
-      setNotifications({ type: "error", msg: customMsg });
+      setMessage({ type: "error", msg: customMsg });
     }
   };
 
   const handleGoogleSignup = async () => {
     try {
-      await signInWithPopup(auth, provider);
+      await signInWithPopup(auth, googleAuth);
       console.log("Signed in with Google");
-      setNotifications({ type: "success", msg: "Signed up via Google" });
+      setMessage({ type: "success", msg: "Signed up via Google" });
       setTimeout(() => navigate("/"), 3000);
     } catch (err) {
       console.error("Google signup error:", err);
-      setNotifications({ type: "error", msg: `Google signup failed: ${err.message}` });
+      setMessage({ type: "error", msg: `Google signup failed: ${err.message}` });
     }
   };
 
@@ -126,14 +123,14 @@ const SignupPage = () => {
         <p className="text-lg mb-8">Create an account to begin your journey</p>
       </motion.div>
       {/* Right white part that contains the form*/}
-      <motion.div initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="w-1/2 flex items-center justify-center bg-white">
+      <motion.div initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="w-1/2 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg p-10 w-full max-w-md">
-          <h2 className="text-3xl font-bold mb-2 text-gray-800">Sign Up</h2>
+          <h2 className="text-3xl font-bold mb-2 text-black">Sign Up</h2>
           <p className="text-sm text-gray-500 mb-6">Join us today! Enter your details below.</p>
           {/* only show the part on the right if notifications.msg is not empty*/}
-          {notifications.msg && (
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className={`p-3 rounded mb-4 ${notifications.type === "error" ? "bg-red-100 text-red-700 border border-red-300" : "bg-green-100 text-green-700 border border-green-300"}`}>
-              {notifications.msg}
+          {message.msg && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className={`p-3 rounded mb-4 ${message.type === "error" ? "bg-red-100 text-red-700 border border-red-300 rounded-md" : "bg-green-100 text-green-700 border border-green-300 rounded-md"}`}>
+              {message.msg}
             </motion.div>
           )}
 
@@ -150,8 +147,8 @@ const SignupPage = () => {
                 onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
-              {errors.firstName && (
-                <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>
+              {error.firstName && (
+                <p className="text-red-500 text-xs mt-1">{error.firstName}</p>
               )}
             </div>
 
@@ -166,8 +163,8 @@ const SignupPage = () => {
                 onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
-              {errors.lastName
-                ? <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
+              {error.lastName
+                ? <p className="text-red-500 text-xs mt-1">{error.lastName}</p>
                 : null
               }
             </div>
@@ -183,8 +180,8 @@ const SignupPage = () => {
                 onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
-              {errors.email
-                ? <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+              {error.email
+                ? <p className="text-red-500 text-xs mt-1">{error.email}</p>
                 : null
               }
             </div>
@@ -193,16 +190,16 @@ const SignupPage = () => {
               <label htmlFor="password" className="text-sm text-gray-600">Password</label>
               <input
                 id="password"
-                type={passwordVisible ? "text" : "password"}
+                type={showPassword ? "text" : "password"}
                 value={userInfo.password}
                 onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none pr-10"
               />
-              <button type="button" onClick={() => setPasswordVisible(prev => !prev)} className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition">
-                {passwordVisible ? <EyeOff size={20} /> : <Eye size={20} />}
+              <button type="button" onClick={() => setShowPassword(prev => !prev)} className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition">
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
-              {errors.password
-                ? <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+              {error.password
+                ? <p className="text-red-500 text-xs mt-1">{error.password}</p>
                 : null
               }
 
@@ -219,13 +216,13 @@ const SignupPage = () => {
               <label htmlFor="confirmPassword" className="text-sm text-gray-600">Confirm Password</label>
               <input
                 id="confirmPassword"
-                type={passwordVisible ? "text" : "password"}
+                type={showPassword ? "text" : "password"}
                 value={userInfo.confirmPassword}
                 onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
-              {errors.confirmPassword
-                ? <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>
+              {error.confirmPassword
+                ? <p className="text-red-500 text-xs mt-1">{error.confirmPassword}</p>
                 : null
               }
             </div>
@@ -244,14 +241,14 @@ const SignupPage = () => {
                 <label htmlFor="terms" className="text-gray-600">
                   I agree to the <span onClick={openTermsTab} className="text-blue-600 hover:underline cursor-pointer">Terms and Conditions</span>
                 </label>
-                {errors.terms
-                ? <p className="text-red-500 text-xs mt-1">{errors.ter}</p>
+                {error.terms
+                ? <p className="text-red-500 text-xs mt-1">{error.terms}</p>
                 : null
               }
               </div>
             </div>
 
-            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition">
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} type="submit" className="w-full bg-blue-700 text-white py-2 rounded-md hover:bg-blue-800 transition">
               Sign Up
             </motion.button>
 
