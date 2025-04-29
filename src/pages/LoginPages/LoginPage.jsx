@@ -53,8 +53,8 @@ const LoginPage = () => {
     }
   };
 
-  const handleInput = (e) => {
-    setUserCred(prev => ({ ...prev, [e.target.id]: e.target.value })); // ...prev is spread operator, take the previous state data and re put it as it was
+  const handleChange = (e) => {
+    setUserCred({ ...usercred, [e.target.id]: e.target.value }); // ...prev is spread operator, take the previous state data and re put it as it was
   };
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -96,7 +96,7 @@ const LoginPage = () => {
                 type="email"
                 id="email"
                 value={usercred.email}
-                onChange={handleInput}
+                onChange={handleChange}
                 className="w-full mt-1 px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
               {error.email
@@ -111,7 +111,7 @@ const LoginPage = () => {
                 type={showPass ? "text" : "password"}
                 id="password"
                 value={usercred.password}
-                onChange={handleInput}
+                onChange={handleChange}
                 className="w-full mt-1 px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
 
               />

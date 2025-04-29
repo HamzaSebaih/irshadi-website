@@ -1,120 +1,109 @@
 import { useState } from "react";
-import { getAuth, sendPasswordResetEmail } from "firebase/auth";
-import { useNavigate } from 'react-router';
+import { useNavigate, Link } from "react-router";
+import { getAuth, sendPasswordResetEmail, fetchSignInMethodsForEmail} from "firebase/auth";
+import { motion } from "framer-motion";
+import Lottie from "lottie-react";
+import myAnimation from "../../assets/Animation.json";
 
-const ForgotPassword = () => {
-  const [formDatas, setFormDatas] = useState({ email: "" });
-  const [errs, setErrs] = useState({ main: "", other: "" });
-  const [infos, setInfos] = useState("");
-  const [sendin, setSendin] = useState(false);
-
+const ForgetPassPage = () => {
+  const [usercred, setUserCred] = useState({
+    email: "",
+  });
+  const [error, setError] = useState({});
+  const [message, setMessage] = useState("");
   const navigate = useNavigate();
   const auth = getAuth();
 
-  const handleChange = (e) => {
-    setFormDatas({ ...formDatas, [e.target.name]: e.target.value });
+  // method to handle reseting password when user click on the button
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setMessage("");
+    const validation = {};
+  
+    // --- client-side validation
+    if (!usercred.email) {
+      validation.email = "Please enter your email";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usercred.email)) {
+      validation.email = "Email format is incorrect";
+    }
+    setError(validation);
+    if (Object.keys(validation).length) return;
+  
+    try {
+      await sendPasswordResetEmail(auth, usercred.email);
+      setMessage("Password reset link has been sent to your email!");
+      setTimeout(() => navigate("/"), 3000);
+    } catch (err) {
+      console.error(err);
+      setMessage("Something went wrong, please try again later.");
+    }
   };
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setErrs({ main: "", other: "" });
-    setInfos("");
-    setSendin(true);
-
-    // check if email format incorrect
-    if (!formDatas.email.includes("@")) {
-      setErrs({ ...errs, other: "email not correct i think." });
-      setSendin(false);
-      return;
-    }
-
-    try {
-      // try to send reset link 
-      await sendPasswordResetEmail(auth, formDatas.email);
-      setInfos("we sent email, check inbox plz");
-      setTimeout(() => navigate('/login'), 4873); 
-      setSendin(false);
-    } catch (e) {
-      if (e.code === 'auth/user-not-found') {
-        setErrs({ ...errs, main: "cant find user sorry" });
-      } else {
-        setErrs({ ...errs, main: "some error happen, idk" });
-      }
-      setSendin(false);
-    }
-  }
-
+  const handleChange = (e) => {
+    setUserCred({ ...usercred, [e.target.id]: e.target.value }); // ...prev is spread operator, take the previous state data and re put it as it was
+  };
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <div className="hidden md:flex md:w-1/2 bg-blue-600 items-center justify-center p-10">
-        <div className="text-center">
-          <h1 className="text-4xl text-white font-bold mb-3">reset access lol</h1>
-          <p className="text-blue-100">dont worry its happen sometimes</p>
-        </div>
-      </div>
+      {/* Left blue part with the lottie animation*/}
+      <motion.div initial={{ opacity: 0, x: -100 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="w-1/2 bg-blue-700 text-white p-12 flex flex-col justify-center items-center">
+        <Lottie animationData={myAnimation} loop autoplay className="w-2.5/4" />
+        <h1 className="text-4xl font-extrabold mb-6 mt-6 leading-tight">
+          Welcome to <br />
+          <span className="text-blue-300">Irashadi Platform</span>
+        </h1>
+        <p className="text-lg mb-8">Glad to have you here</p>
+      </motion.div>
 
-      <div className="flex w-full md:w-1/2 items-center justify-center p-8">
-        <div className="max-w-md w-full">
-          <h2 className="text-2xl font-semibold mb-5">forgot ur password?</h2>
-          <p className="text-gray-600 mb-4">write ur email we send reset link</p>
+      {/* Right white part that contains the form*/}
+      <motion.div
+        initial={{ opacity: 0, x: 120 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8 }}
+        className="w-1/2 flex items-center justify-center"
+      >
+        <div className="max-w-md w-full p-10 bg-white rounded-xl shadow-lg border border-gray-200">
+          <h2 className="text-3xl font-bold mb-2 text-black">Reset Password</h2>
+          <p className="text-sm text-gray-500 mb-6">Please provide your email below</p>
+          {message ? (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-2 p-2 bg-green-100 text-green-700 border border-green-300 rounded-md"
+            >
+              {message}
+            </motion.div>
+          ) : null}
 
-          {errs.main && (
-            <div className="bg-red-100 text-red-700 p-2 rounded mb-4 text-xs">
-              {errs.main}
-            </div>
-          )}
 
-          {errs.other && (
-            <div className="bg-yellow-100 text-yellow-800 p-2 rounded mb-4 text-xs">
-              {errs.other}
-            </div>
-          )}
-
-          {infos && (
-            <div className="bg-green-100 text-green-800 p-2 rounded mb-4 text-xs">
-              {infos}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="mb-5">
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                email adress
-              </label>
+          <form onSubmit={handleResetPassword} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="mb-1 text-sm font-medium text-gray-700">Email</label>
               <input
                 type="email"
-                name="email"
                 id="email"
-                value={formDatas.email}
+                value={usercred.email}
                 onChange={handleChange}
-                placeholder="someone@something.com"
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
+                className="w-full mt-1 px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
+              {error.email
+                ? <p className="text-red-500 text-xs mt-1">{error.email}</p>
+                : null
+              }
             </div>
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               type="submit"
-              disabled={sendin}
-              className={`w-full py-2 px-4 rounded bg-blue-600 text-white hover:bg-blue-700 transition ${sendin ? 'opacity-60 cursor-not-allowed' : ''}`}
+              className="w-full px-4 py-2 bg-blue-700 text-white rounded-md font-medium shadow hover:bg-blue-800"
             >
-              {sendin ? 'sending....' : 'reset ur pass'}
-            </button>
-
-            <div className="text-center mt-6">
-              <button
-                type="button"
-                onClick={() => { navigate('/login'); }}
-                className="text-blue-600 hover:text-blue-800 text-sm"
-              >
-                go back to login
-              </button>
-            </div>
+              Reset Password
+            </motion.button>
           </form>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
 
-export default ForgotPassword;
+export default ForgetPassPage;
