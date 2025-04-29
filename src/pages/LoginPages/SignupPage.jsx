@@ -83,7 +83,6 @@ const SignupPage = () => {
       await logout();
 
       setMessage({ type: "success", msg: "Check your inbox to verify your email!" });
-      setTimeout(() => navigate("/LoginPage"), 3000);
     } catch (err) {
       console.error("Signup went wrong:", err);
       const customMsg = err.code === "auth/email-already-in-use"
@@ -93,15 +92,12 @@ const SignupPage = () => {
     }
   };
 
-  const handleGoogleSignup = async () => {
+  const googleLogin = async () => {
     try {
       await signInWithPopup(auth, googleAuth);
-      console.log("Signed in with Google");
-      setMessage({ type: "success", msg: "Signed up via Google" });
-      setTimeout(() => navigate("/"), 3000);
+      navigate("/loading");
     } catch (err) {
-      console.error("Google signup error:", err);
-      setMessage({ type: "error", msg: `Google signup failed: ${err.message}` });
+      setError("Couldn't sign in with Google.");
     }
   };
 
@@ -262,7 +258,7 @@ const SignupPage = () => {
               <hr className="flex-grow border-gray-300" />
             </div>
 
-            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleGoogleSignup} type="button" className="w-full flex items-center justify-center gap-3 border border-gray-300 py-2 rounded-md hover:bg-gray-100 transition">
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={googleLogin} type="button" className="w-full flex items-center justify-center gap-3 border border-gray-300 py-2 rounded-md hover:bg-gray-100 transition">
               <img src="/search.png" alt="Google" className="w-5 h-5" />
               Continue with Google
             </motion.button>
