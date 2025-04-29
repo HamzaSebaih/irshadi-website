@@ -37,8 +37,8 @@ const SignupPage = () => {
     length: pwd.length >= 8,
   });
   // When user type something in any input fields we use state to save it 
-  const handleInput = (e) => {
-    setUserInfo(prev => ({ ...prev, [e.target.id]: e.target.value })); // ...prev is spread operator, take the previous state data and re put it as it was
+  const handleChange = (e) => {
+    setUserInfo({...userInfo, [e.target.id]: e.target.value }); // ...prev is spread operator, take the previous state data and re put it as it was
   };
 
   const handleSubmit = async (e) => {
@@ -144,7 +144,7 @@ const SignupPage = () => {
                 id="firstName"
                 type="text"
                 value={userInfo.firstName}
-                onChange={handleInput}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
               {error.firstName && (
@@ -160,7 +160,7 @@ const SignupPage = () => {
                 id="lastName"
                 type="text"
                 value={userInfo.lastName}
-                onChange={handleInput}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
               {error.lastName
@@ -177,7 +177,7 @@ const SignupPage = () => {
                 id="email"
                 type="email"
                 value={userInfo.email}
-                onChange={handleInput}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
               {error.email
@@ -192,7 +192,7 @@ const SignupPage = () => {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={userInfo.password}
-                onChange={handleInput}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none pr-10"
               />
               <button type="button" onClick={() => setShowPassword(prev => !prev)} className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition">
@@ -218,7 +218,7 @@ const SignupPage = () => {
                 id="confirmPassword"
                 type={showPassword ? "text" : "password"}
                 value={userInfo.confirmPassword}
-                onChange={handleInput}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
               {error.confirmPassword
