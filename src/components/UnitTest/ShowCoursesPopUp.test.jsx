@@ -25,7 +25,7 @@ describe('ShowCoursesPopUp', () => {
   it('fetches and shows courses when the component loads', async () => {
     // this is the course it should fetch
     const sampleCourses = [
-      { department: 'CPIT', course_number: 250, course_name: 'Test Course', hours: 3 },
+      { department: 'CPIT', course_number: 250, course_name: 'Software Engineering', hours: 3 },
     ];
 
     // simulate fetch returning course list
