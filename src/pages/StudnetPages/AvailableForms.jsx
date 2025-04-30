@@ -34,7 +34,7 @@ const AvailableForms = () => {
             }
 
             const data = await response.json();
-            setForms(data.forms || []) // Ensure forms is array
+            setForms(data.forms || [])
           } catch (error) {
             console.error("Error fetching forms:", error);
             setForms([]);
@@ -75,7 +75,7 @@ const AvailableForms = () => {
                                 <Link
                                     to={`/FillFormPage`} // here I will pass other elements to the FillFormPage (passing the whole form)
                                     state={{ form: form }} // passing the form to the next page
-                                    title="Fill Form"
+                                    title="Start Form"
                                     className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                                 >
                                     Start Form

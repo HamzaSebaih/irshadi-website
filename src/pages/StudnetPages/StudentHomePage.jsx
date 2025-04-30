@@ -15,7 +15,7 @@ const StudentHomePage = () => {
                     <div className="space-y-8 text-xl">
                         <h3 className="text-2xl font-semibold text-gray-700">Current Student Info:</h3>
                         <p className="text-gray-700">
-                            <span className="font-medium text-gray-900">Name:</span> { user.displayName ?? extraInfo.name ?? "No Data"}
+                            <span className="font-medium text-gray-900">Name:</span> { user.displayName ?? extraInfo.name ?? "No Data"} {/* here I will check first in auth then in the backend then if not exist no data*/}
                         </p>
                         <p className="text-gray-700">
                             <span className="font-medium text-gray-900">Current Progress:</span> {extraInfo.hours.completed ?? "No Data"}
