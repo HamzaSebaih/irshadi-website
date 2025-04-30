@@ -40,17 +40,16 @@ const StudentImportRecordPage = () => {
   return (
     <div className="min-h-screen bg-blue-50 py-8 px-4">
       <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-8">
-        {/* Header Section */}
+        {/* header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-blue-800 mb-2">
             Import Academic Records
           </h1>
-          <p className="text-gray-600">Securely transfer your academic documents</p>
+          <p className="text-gray-600">Transfer your academic documents</p>
         </div>
 
-        {/* Main Content */}
         <div className="space-y-6">
-          {/* Download Card */}
+          {/* download card */}
           <div className="bg-blue-50 p-6 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -79,7 +78,7 @@ const StudentImportRecordPage = () => {
             </div>
           </div>
 
-          {/* How to Use Section */}
+          {/* how to use section */}
           <div className="max-w-lg mx-auto p-6 bg-white rounded-lg shadow-md">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">How to Use</h3>
             <ol className="list-decimal list-inside space-y-2 text-gray-700">
@@ -102,14 +101,9 @@ const StudentImportRecordPage = () => {
             </ol>
           </div>
 
-
-          {/* Existing Users Section */}
           <div className="bg-blue-50 p-4 rounded-md">
             <p className="text-sm text-blue-800">
-              Already have the extension?{' '}
-              <a href="#" className="font-semibold hover:text-blue-600">
-                Ignore step 1
-              </a>
+              Already have the extension? Ignore step 1
             </p>
           </div>
 
