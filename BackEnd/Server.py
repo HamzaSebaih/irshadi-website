@@ -55,7 +55,7 @@ def admin_required(f):
         #now grab his uid , check if his file is in the admins collection
         #if it exists, it means he is an admin
         user_id = decoded_token["uid"]
-        user_ref = db.collection('admins').document(user_id)
+        user_ref = db.collection('Admins').document(user_id)
         user = user_ref.get()
         if (not user.exists):
             return jsonify({"error": "Admin access required"}), 403
