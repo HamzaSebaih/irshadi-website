@@ -5,16 +5,17 @@ import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
-import animationData from "../../assets/Animation.json";
-import ProfileCompletionPage from "./ProfileCompletionPage";
+import myAnimation from "../../assets/Animation.json";
 
 const LoginPage = () => {
-  const [userEmail, setUserEmail] = useState("");
-  const [userPassword, setUserPassword] = useState("");
+  const [usercred, setUserCred] = useState({
+    email: "",
+    password: "",
+  });
   const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(false);
-  const [loginError, setLoginError] = useState("");
-
+  const [rememberMe, setRememberMe] = useState(false);
+  const [error, setError] = useState({});
+  const [message, setMessage] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
   const auth = getAuth();
@@ -23,135 +24,142 @@ const LoginPage = () => {
   // method to handle when user submit his credentals
   const submitForm = async (event) => {
     event.preventDefault();
-    setLoginError("");
+    setError("");
+    setMessage("");
+    const validation = {};
+    if (!usercred.email) {
+      validation.email = "Email is required."
+    }
+    if (!usercred.password) {
+      validation.password = "Password is required."
+    }
+    setError(validation);
+    // if any input fileds are empty, stop and exit the method (don't login)
+    if (Object.keys(validation).length) return;
     try {
-      await login(userEmail, userPassword);
-      if (auth.currentUser?.emailVerified) {
-        console.log("Email verified!");
-      }
+      await login(usercred.email, usercred.password);
       navigate("/loading");
     } catch (err) {
-      console.error("Login failed", err);
-      setLoginError("Wrong credentials. Check and try again.");
+      setMessage("Email or password is wrong.");
     }
   };
   // handle Google login when user click the button
   const googleLogin = async () => {
     try {
-      const res = await signInWithPopup(auth, googleAuth);
-      if (res.additionalUserInfo?.isNewUser) {
-        navigate("/ProfileCompletionPage");
-      } else {
-        navigate("/loading");
-      }
+      await signInWithPopup(auth, googleAuth);
+      navigate("/loading");
     } catch (err) {
-      console.error("Google login error:", err);
-      setLoginError("Couldn't sign in with Google.");
+      setError("Couldn't sign in with Google.");
     }
   };
 
+  const handleChange = (e) => {
+    setUserCred({ ...usercred, [e.target.id]: e.target.value }); // ...prev is spread operator, take the previous state data and re put it as it was
+  };
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {/* Left Panel */}
-      <motion.div
-        initial={{ opacity: 0, x: -120 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.8 }}
-        className="hidden lg:flex flex-col items-center justify-center w-1/2 bg-primary-dark text-white p-10"
-      >
-        <Lottie animationData={animationData} loop autoplay className="w-3/4 max-w-md" />
-        <h1 className="mt-6 text-4xl font-bold text-center">Welcome to <span className="text-primary-light">Irashadi</span></h1>
-        <p className="mt-4 text-lg text-center">Glad to have you here!</p>
+      {/* Left blue part with the lottie animation*/}
+      <motion.div initial={{ opacity: 0, x: -100 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="w-1/2 bg-blue-700 text-white p-12 flex flex-col justify-center items-center">
+        <Lottie animationData={myAnimation} loop autoplay className="w-2.5/4" />
+        <h1 className="text-4xl font-extrabold mb-6 mt-6 leading-tight">
+          Welcome to <br />
+          <span className="text-blue-300">Irashadi Platform</span>
+        </h1>
+        <p className="text-lg mb-8">Glad to have you here</p>
       </motion.div>
 
-      {/* Right Panel - Form */}
+      {/* Right white part that contains the form*/}
       <motion.div
         initial={{ opacity: 0, x: 120 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.8 }}
-        className="flex w-full lg:w-1/2 items-center justify-center"
+        className="w-1/2 flex items-center justify-center"
       >
-        <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-md border border-gray-200 m-4">
-          <h2 className="text-2xl font-semibold text-center text-gray-800">Sign In</h2>
-          <p className="text-center text-sm text-gray-500 mt-2 mb-6">Access your account below</p>
-
-          {loginError && (
+        <div className="max-w-md w-full p-10 bg-white rounded-xl shadow-lg border border-gray-200">
+          <h2 className="text-3xl font-bold mb-2 text-black">Log In</h2>
+          <p className="text-sm text-gray-500 mb-6">Access your account below</p>
+          {message ? (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-3 bg-danger-light border border-danger text-danger-dark rounded-md text-sm"
+              className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-md"
             >
-              {loginError}
+              {message}
             </motion.div>
-          )}
+          ) : null}
+
 
           <form onSubmit={submitForm} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block mb-1 text-sm font-medium text-gray-700">Email</label>
+              <label htmlFor="email" className="mb-1 text-sm font-medium text-gray-700">Email</label>
               <input
                 type="email"
                 id="email"
-                value={userEmail}
-                onChange={(e) => setUserEmail(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                required
+                value={usercred.email}
+                onChange={handleChange}
+                className="w-full mt-1 px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
               />
+              {error.email
+                ? <p className="text-red-500 text-xs mt-1">{error.email}</p>
+                : null
+              }
             </div>
 
             <div className="relative">
-              <label htmlFor="password" className="block mb-1 text-sm font-medium text-gray-700">Password</label>
+              <label htmlFor="password" className=" mb-1 text-sm font-medium text-gray-700">Password</label>
               <input
                 type={showPass ? "text" : "password"}
                 id="password"
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                required
+                value={usercred.password}
+                onChange={handleChange}
+                className="w-full mt-1 px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none"
+
               />
               <button
                 type="button"
                 onClick={() => setShowPass(!showPass)}
-                className="absolute inset-y-0 right-0 top-6 flex items-center pr-3 text-gray-400 hover:text-primary"
-                title={showPass ? "Hide password" : "Show password"}
+                className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition"
+                
               >
-                {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPass ? <Eye size={20} /> : <EyeOff size={20} />}
               </button>
+              {error.password
+                ? <p className="text-red-500 text-xs mt-1">{error.password}</p>
+                : null
+              }
             </div>
 
             <div className="flex items-center justify-between">
               <label className="flex items-center text-sm text-gray-600">
                 <input
                   type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="mr-2 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="mr-2 h-4 w-4 rounded border-gray-300 "
                 />
                 Keep me signed in
               </label>
-              <Link to="/ForgetPassPage" className="text-sm text-accent hover:underline">Forgot password?</Link>
+              <Link to="/ForgetPassPage" className="text-sm text-blue-500 hover:underline">Forgot password?</Link>
             </div>
 
             <div className="text-center text-sm text-gray-500">
               New here?{' '}
-              <Link to="/SignupPage" className="font-medium text-accent hover:underline">Create account</Link>
+              <Link to="/SignupPage" className="font-medium text-blue-500 hover:underline">Create account</Link>
             </div>
 
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               type="submit"
-              className="w-full px-4 py-2 bg-primary text-white rounded-md font-medium shadow hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="w-full px-4 py-2 bg-blue-700 text-white rounded-md font-medium shadow hover:bg-blue-800"
             >
               Sign In
             </motion.button>
 
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-2 text-gray-500">OR</span>
-              </div>
+            <div className="flex items-center my-4">
+              <hr className="flex-grow border-gray-300" />
+              <span className="mx-2 text-sm text-gray-500">OR</span>
+              <hr className="flex-grow border-gray-300" />
             </div>
 
             <motion.button
@@ -159,7 +167,7 @@ const LoginPage = () => {
               whileTap={{ scale: 0.95 }}
               type="button"
               onClick={googleLogin}
-              className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-gray-300 bg-white rounded-md text-gray-700 shadow hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
+              className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-gray-300 bg-white rounded-md text-gray-700 shadow hover:bg-gray-100 "
             >
               <img src="/search.png" alt="Google" className="h-5 w-5" />
               Continue with Google
