@@ -29,7 +29,7 @@ CORS(app)
 # Initialize Firestore
 cred = credentials.Certificate("BackEnd/OtherFiles/irshadi-auth-firebase-adminsdk-fbsvc-d9b5b63d0d.json")  # this is the credentials that will be used to connect with the firestore
 firebase_admin.initialize_app(cred) #here we make a connection with firebase using our credentials, 
-db = firestore.client()  # This is your Firestore database object, here we create a connection to our firestore database, 
+db = firestore.client()  # This is our Firestore database object, here we create a connection to our firestore database, 
 
 
 #General Functions Section _______________
@@ -256,9 +256,6 @@ def generate_time_slots():
             current_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=90)).time()
 
     return slots_50_min, slots_80_min
-# --- End Helper Function ---
-
-
 
 #End Of General Functions Section _______________
 
@@ -2197,7 +2194,7 @@ def handle_extension_update():
     if not tokens_ref:
         return jsonify({"error": "Invalid or expired code"}), 404
     
-    # Get the first (and only) matching document
+    # Get the matching document
     token_doc = tokens_ref[0]  #this is a document snapshot
     token_data = token_doc.to_dict()
     uid = token_doc.id  # UID is the document ID
@@ -2213,7 +2210,7 @@ def handle_extension_update():
         # Perform the update of student information
         update_student_data(uid)
         
-        # Delete the token to enforce single-use
+        # Delete the token file
         db.collection('otp_tokens').document(uid).delete()
         
         return jsonify({"message": "Update successful"}), 200
@@ -2227,17 +2224,16 @@ def handle_extension_update():
 
 def update_student_data(uid):
     """
-    Parses HTML from the request, extracts student academic info (including
-    completed, equivalent, AND currently registered courses), maps the major
-    to English, and updates the student document in Firestore.
-    Called by handle_extension_update.
+    Parses HTML from the request, extracts student academic info, personal information such as gpa, hours (completed,exchanged,gpa,registerd) 
+    and courses information (completed, equivalent, and registerd courses)also we map the major
+    to English, then we update the student document in Firestore, this funcion will be Called by handle_extension_update.
     """
     MAJOR_MAPPING = {
         "تقنية المعلومات": "IT",
         "نظم المعلومات": "IS",
-        "علوم الحاسبات": "CS"
+        "علوم الحاسبات": "CS"# add major mapping as majors in odus are written in arabic and we need english 
     }
-
+    
     # Access the HTML from the Flask request body
     html = request.data.decode('utf-8')
     if not html:
@@ -2254,7 +2250,7 @@ def update_student_data(uid):
     finished_courses = [] # Initialize list for finished/equivalent/current courses
     currently_registered_courses_set = set() # Use a set for uniqueness of current courses
 
-    # --- Find Specific Tables ---
+    # Find Specific Tables 
     academic_table = None
     transcript_tables = []
     equivalent_courses_table = None
@@ -2302,11 +2298,10 @@ def update_student_data(uid):
             semester_header = table.find_previous('td', class_='dddefault')
             if semester_header and semester_header.find('font', color='FF0000'): # Look for red font semester header
                  transcript_tables.append(table)
-                 # print("Found a Transcript table.") # Less verbose
+                 
 
-    # --- 1. Process Academic Info Table ---
+    # Step 1: Process Academic Info Table 
     if academic_table:
-        # print("Processing Academic Info table...") # Less verbose
         rows = academic_table.find_all('tr')
         for row in rows:
             ths = row.find_all('th', class_='ddheader')
@@ -2327,9 +2322,8 @@ def update_student_data(uid):
         print("Warning: Academic table not found")
 
 
-    # --- 2. Process Transcript Tables (Finished Courses) ---
+    # Step 2: Process Transcript Tables (Finished Courses) 
     for table in transcript_tables:
-        # print("Processing Transcript table...") # Less verbose
         rows = table.find_all('tr')[1:]
         for row in rows:
             cols = row.find_all('td', class_='dddefault')
@@ -2347,9 +2341,8 @@ def update_student_data(uid):
                           if course_code not in finished_courses:
                                finished_courses.append(course_code)
 
-    # --- 3. Process Equivalent Courses Table ---
+    # Step 3: Process Equivalent Courses Table 
     if equivalent_courses_table:
-        # print("Processing Equivalent Courses table...") # Less verbose
         rows = equivalent_courses_table.find_all('tr')[1:]
         for row in rows:
             cols = row.find_all('td', class_='dddefault')
@@ -2361,7 +2354,7 @@ def update_student_data(uid):
                      if course_code not in finished_courses:
                           finished_courses.append(course_code)
 
-    # --- 4. Process Currently Registered Courses Table (Corrected Logic) ---
+    # Step 4: Process Currently Registered Courses Table 
     if current_courses_table:
         print("Processing 'Currently Registered Courses' table...")
         headers = [th.text.strip() for th in current_courses_table.find_all('th', class_='ddheader')]
@@ -2383,22 +2376,22 @@ def update_student_data(uid):
              traceback.print_exc()
     else:
         print("Warning: 'Currently Registered Courses' table not found or identified.")
-    # --- End Corrected Logic ---
+    
 
-    # --- Combine finished, equivalent, and current courses ---
+    # Combine current courses 
     for course_code in currently_registered_courses_set:
         if course_code not in finished_courses:
             finished_courses.append(course_code)
     # --- End Combining ---
 
 
-    # --- 5. Apply Major Mapping ---
+    # Step 5:  Apply Major Mapping 
     arabic_major = general_info.get("major", "")
     english_major = MAJOR_MAPPING.get(arabic_major, arabic_major) # Default to original if no mapping
     print(f"Mapping major: '{arabic_major}' -> '{english_major}'")
     # --- End Mapping ---
 
-    # --- 6. Prepare Final Update Data ---
+    # Step 6: Prepare Final Update Data 
     doc = student_document.get()
     if not doc.exists:
         raise ValueError("Student not found")
@@ -2421,27 +2414,21 @@ def update_student_data(uid):
         "last_updated": datetime.now(timezone.utc)
     }
 
-    # --- 7. Update Firestore ---
-    student_document.set(updated_data, merge=True) # Use merge=True to be safe
+    # Step 7: Update Firestore 
+    student_document.set(updated_data, merge=True) # Use merge=True to not remove old info
 
     print(f"Finished Courses (including current): {len(finished_courses)}")
     print("Updated Firestore document with data:", {k: v for k, v in updated_data.items() if k != 'Finished_Courses'}, f"Finished_Courses count: {len(updated_data['Finished_Courses'])}")
 
 @app.route('/getMyForms', methods=['GET'])
-@token_required # Ensures only logged-in users (students/admins) can call this
-def get_my_forms(decoded_token): # token_required provides decoded_token
+@token_required 
+def get_my_forms(decoded_token): 
     """
-    Retrieves a list of forms relevant to the calling student's major AND
-    that are currently active (current time >= start_date AND current time < end_date).
-    Requires user authentication.
-    Filters forms based on matching the student's 'major' field with the form's 'plan_id'
-    and checking the form's start_date and end_date.
-    Returns a JSON list containing each matching form's ID and its data,
-    EXCLUDING the 'Form_Responses' field.
+    Retrieves a list of forms relevant to the calling student, that are currently active and has the same major.
     """
-    uid = None # Initialize for error logging
+    uid = None # Initialize data
     try:
-        # --- 1. Get Student's UID and Major ---
+        # Step 1: Get Student's UID and Major and validate data
         uid = decoded_token.get('uid')
         if not uid:
              return jsonify({"error": "UID not found in token"}), 400
@@ -2460,48 +2447,48 @@ def get_my_forms(decoded_token): # token_required provides decoded_token
              print(f"Warning: Student {uid} has no major assigned.")
              return jsonify({"forms": []}), 200 # Return empty list if no major
 
-        # --- 2. Query All Forms ---
+        # Step 2: Query All Forms 
         forms_ref = db.collection('Forms')
         forms_stream = forms_ref.stream()
-        current_time_utc = datetime.now(timezone.utc) # Get current time once
+        current_time_utc = datetime.now(timezone.utc) # Get current time 
 
-        # --- 3. Filter Forms by Major, Start Date, End Date and Format Data ---
+        # Step 3: Filter Forms by Major, Start Date, End Date and Format Data 
         relevant_forms_list = []
         for doc in forms_stream:
             form_id = doc.id
             form_data = doc.to_dict()
 
             form_plan_id = form_data.get('plan_id')
-            form_start_date = form_data.get('start_date') # Timestamp from Firestore
-            form_end_date = form_data.get('end_date')     # Timestamp from Firestore
+            form_start_date = form_data.get('start_date') # Timestamps from Firestore
+            form_end_date = form_data.get('end_date')     
 
-            # --- Check 1: Major Match ---
+            # Check 1: student must have the same Major 
             if form_plan_id == student_major:
 
-                # --- Check 2 & 3: Form is Active (Started AND Not Ended) ---
-                # Ensure form dates are valid datetime objects
+                # Check 2 and 3: Form is Active (Started AND Not Ended) 
+                # Ensure form dates are valid datetime objects so we can compare with current datetime 
                 if isinstance(form_start_date, datetime) and isinstance(form_end_date, datetime):
                     # Make sure comparison is timezone-aware (Firestore Timestamps usually are UTC)
                     form_start_date_utc = form_start_date.replace(tzinfo=timezone.utc) if form_start_date.tzinfo is None else form_start_date
                     form_end_date_utc = form_end_date.replace(tzinfo=timezone.utc) if form_end_date.tzinfo is None else form_end_date
 
                     # Check if current time is within the start and end dates
-                    # (Inclusive of start date, exclusive of end date - adjust if needed)
                     if current_time_utc >= form_start_date_utc and current_time_utc < form_end_date_utc:
-                        # If major matches AND form is active, add it
-                        form_data.pop('Form_Responses', None) # Exclude responses
+                        # all checks are good. now add get rid of form responses attribute from the document snapshot object
+                        #then make a python dictionary that will represent the form, it contains the form id, and the rest of the form data
+                        form_data.pop('Form_Responses', None) # we don't need responses
                         form_entry = {
                             "form_id": form_id,
                             **form_data # Unpack the rest of the form data
                         }
-                        relevant_forms_list.append(form_entry)
+                        relevant_forms_list.append(form_entry) #then add it to the list of relevant forms
                     # else: Form hasn't started or has already ended, skip
                 else:
                     # Log forms with invalid dates but don't crash
                     print(f"Warning: Form {form_id} has invalid or missing 'start_date' or 'end_date'. Skipping.")
-            # --- End Checks ---
+            # End Checks 
 
-        # --- 4. Return the Response ---
+        # Step 4:  Return the Response 
         # Return the filtered list of forms
         return jsonify({"forms": relevant_forms_list}), 200
 
@@ -2740,23 +2727,24 @@ def get_form_courses(decoded_token):
         return jsonify({"error": "Failed to retrieve form courses due to an internal server error", "details": str(e)}), 500
 
 @app.route('/addFormResponse', methods=['POST'])
-@token_required # Student needs to be logged in
+@token_required 
 def add_form_response(decoded_token):
     """
     Adds or updates a student's response (list of selected courses) to a specific form.
-    Requires user authentication.
-    Expects JSON: {"form_id": "FORM_ID", "selected_courses": ["COURSE-ID-1", ...]}
-    Checks if the form exists and is currently active.
-    Validates that the total hours of selected courses do not exceed the limit
-    (max_hours or max_graduate_hours based on student's progress).
-    Stores the response in the form document under Form_Responses.[USER_ID],
-    including a flag indicating if the graduate hour limit was applicable.
-    Increments the 'responses' counter on the form document for new responses.
+    there are many checks that needs to be done:
+    1-make sure form has started and hasn't ended
+    2-if student filled form before, no need to increase responses counter
+    3-in order to know if the student is a graduate or not we must:
+    check the plan required hours and the student hours that he achieved, if we subtract them
+    and the reminaing is less than the max graduate hours, then he is a graduate
+    4-check if the selected courses hours is less than the applicble limit depending on if he is a graduate or not.
+    5-increments the counter of responses
+
     """
-    form_id = None # Initialize for error logging
-    uid = None # Initialize for error logging
+    form_id = None # Initialize data 
+    uid = None 
     try:
-        # --- 1. Get Input and User ID ---
+        # Step 1: Get data and validate
         uid = decoded_token.get('uid')
         if not uid:
              return jsonify({"error": "UID not found in token"}), 400
@@ -2779,11 +2767,11 @@ def add_form_response(decoded_token):
         selected_courses = list(set(filter(None, [c.strip() for c in selected_courses])))
 
 
-        # --- 2. Fetch Form, Student, and Plan Data ---
+        # Step 2: Fetch Form, Student, and Plan Data 
         form_ref = db.collection('Forms').document(form_id)
         student_ref = db.collection('Students').document(uid)
 
-        # --- Check if student has already responded (for accurate increment) ---
+        # --- Check if student has already responded (for accurate increment) 
         # We need the form doc first to check the responses map
         form_doc = form_ref.get()
         if not form_doc.exists:
@@ -2813,7 +2801,8 @@ def add_form_response(decoded_token):
              print(f"Warning: Form {form_id} has invalid/missing configuration (dates, hours, plan_id).")
              return jsonify({"error": "Form configuration is incomplete or invalid"}), 500
 
-        # Fetch Plan's required hours
+        # Fetch Plan's required hours in order to know if student is graduting or not.
+        #important for applicble limit, and for saving it in response
         plan_ref = db.collection('Plans').document(plan_id)
         plan_doc = plan_ref.get()
         if not plan_doc.exists:
@@ -2823,7 +2812,7 @@ def add_form_response(decoded_token):
         if not isinstance(required_hours_for_plan, int) or required_hours_for_plan <= 0:
              return jsonify({"error": f"Plan '{plan_id}' has invalid 'required_hours'"}), 500
 
-        # --- 3. Check Form Active Status ---
+        # Step 3: Check Form Active Status 
         current_time = datetime.now(timezone.utc)
         start_date = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
         end_date = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
@@ -2831,7 +2820,8 @@ def add_form_response(decoded_token):
         if not (start_date <= current_time < end_date):
              return jsonify({"error": f"Form '{form_id}' is not currently active for submissions."}), 403
 
-        # --- 4. Calculate Total Selected Hours ---
+        # Step 4: Calculate Total Selected Hours to check with the applicble limit, so he can register the allowed hours
+        # depends on if he is a graduate or not 
         total_selected_hours = 0
         if selected_courses:
             course_refs_to_get = [db.collection('Courses').document(cid) for cid in selected_courses]
@@ -2843,7 +2833,7 @@ def add_form_response(decoded_token):
                     course_hours = course_data.get('hours')
                     if isinstance(course_hours, int) and course_hours >= 0:
                         total_selected_hours += course_hours
-                        found_hours_count += 1
+                        found_hours_count += 1# for debugging
                     else:
                         print(f"Warning: Course {course_doc.id} has invalid/missing 'hours'.")
                         return jsonify({"error": f"Configuration error for course '{course_doc.id}' (invalid hours)."}), 500
@@ -2854,23 +2844,23 @@ def add_form_response(decoded_token):
                  return jsonify({"error": "One or more selected courses could not be verified."}), 400
 
 
-        # --- 5. Determine Applicable Hour Limit ---
+        # Step 5: Determine Applicable Hour Limit 
         completed_hours = student_data.get('hours', {}).get('completed', 0)
         exchanged_hours = student_data.get('hours', {}).get('exchanged', 0)
         achieved_hours = completed_hours + exchanged_hours
         remaining_hours = required_hours_for_plan - achieved_hours
 
-        is_graduating = (remaining_hours <= max_graduate_hours)
-        applicable_limit = max_graduate_hours if is_graduating else max_hours
-        limit_type = "graduate" if is_graduating else "standard"
+        is_graduating = (remaining_hours <= max_graduate_hours)#here we know if he is graduating or not
+        applicable_limit = max_graduate_hours if is_graduating else max_hours#limit is based on graduation
+        limit_type = "graduate" if is_graduating else "standard"#debugging
 
-        # --- 6. Validate Selected Hours Against Limit ---
+        # Step 6: Validate Selected Hours Against Limit 
         if total_selected_hours > applicable_limit:
             return jsonify({
                 "error": f"Selected hours ({total_selected_hours}) exceed the allowed {limit_type} limit ({applicable_limit}) for this form."
             }), 400
 
-        # --- 7. Prepare and Store Response (with Counter Increment) ---
+        # Step 7: Prepare and Store Response (with Counter Increment) 
         response_data = {
             "selected_courses": selected_courses,
             "total_hours": total_selected_hours,
@@ -2884,18 +2874,16 @@ def add_form_response(decoded_token):
             'last_response_at': current_time      # Update last response timestamp
         }
 
-        # *** Atomically increment counter only if it's a NEW response ***
+        #  Atomically increment counter only if its a new response
         if not student_already_responded:
              # Use firestore.Increment to safely increase the counter by 1
-             # Using the new field name 'responses' as requested.
-             # Ensure the /addForm function also initializes 'responses: 0'.
-             update_payload['responses'] = firestore.Increment(1) # *** Changed key name ***
-        # *** End counter increment ***
+             update_payload['responses'] = firestore.Increment(1) 
+        # End counter increment 
 
         # Update the form document
         form_ref.update(update_payload)
 
-        # --- 8. Return Success Response ---
+        # Step 8: Return Success Response 
         return jsonify({
             "message": f"Your response for form '{form_id}' ({total_selected_hours} hours) has been submitted successfully."
         }), 200
