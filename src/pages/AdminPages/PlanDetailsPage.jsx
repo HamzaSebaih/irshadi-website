@@ -16,7 +16,7 @@ const PlanDetailsPage = () => {
   const [isAddedNewCourse, setIsAddedNewCourse] = useState(null)
   const [deleteCourseFromPlan, setDeleteCourseFromPlan] = useState(null);
   const [deleteCourseFromPlanLevel, setDeleteCourseFromPlanLevel] = useState(null);
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [popupMessage, setPopupMessage] = useState();
   const { user } = useAuth(); // Get current user from AuthContext
 
@@ -26,46 +26,49 @@ const PlanDetailsPage = () => {
     }
     else {
         setIsLoading(true)
-        fetchCourses().finally(() => {
-            setIsPopUpClicked(false)
-            setIsLoading(false)
+        fetchCourses().finally(() => { // why do I fetch twice ? well because when the user press F5 it won't show any change he made before the F5 which is not user frindly
+          // so if fetching once the user enter the page for the first time again will fix the problem then It's a small cost for what value it provide 
+            setIsPopUpClicked(false) //close the popup
+            setIsLoading(false) //finish loading
       });
+
     }
 
   }, [location, navigate, user]);
 
   useEffect(() => {
 
-    if (isAddedNewCourse) {
-      console.log(isAddedNewCourse)
-      if (isAddedNewCourse?.alreadyAdded) {
+    if (isAddedNewCourse) { //update the courses in the plan details based on the value of isAddedNewCourse
+      //isAddedNewCourse dosen't get updated here but it will get updated in ShowCoursesPopUp
+      //so based on its value I can update the courses in the plan and show error based on the state of the value
+      if (isAddedNewCourse?.alreadyAdded) { //for example if its already in the same level it will show to the user its on the same level
         setPopupMessage(isAddedNewCourse.course + " course is already in the "+isAddedNewCourse.level)
       }
-      else if (isAddedNewCourse?.moved) {
+      else if (isAddedNewCourse?.moved) { //if its on a diffrent level then I need to update the ui and tell the user the course has been moved to a new level
         setPlanData(prev => ({
           ...prev,
           levels: {
             ...prev.levels,
-            [isAddedNewCourse.oldLevevl]: prev.levels[isAddedNewCourse.oldLevevl].filter(course => course !== isAddedNewCourse.course)
+            [isAddedNewCourse.oldLevevl]: prev.levels[isAddedNewCourse.oldLevevl].filter(course => course !== isAddedNewCourse.course) //remove the course from old level
           }
         }));
 
-        setPlanData(prev => ({
+        setPlanData(prev => ({ 
           ...prev,
           levels: {
             ...prev.levels,
-            [isAddedNewCourse.level]: [...prev.levels[isAddedNewCourse.level], isAddedNewCourse.course]
+            [isAddedNewCourse.level]: [...prev.levels[isAddedNewCourse.level], isAddedNewCourse.course] //add the course to the new level
           }
         }));
-        setPopupMessage(isAddedNewCourse.course + " course has been moved from " + isAddedNewCourse.oldLevevl + " To " + isAddedNewCourse.level)
+        setPopupMessage(isAddedNewCourse.course + " course has been moved from " + isAddedNewCourse.oldLevevl + " To " + isAddedNewCourse.level) //show the pop up message
 
       }
-      else {
+      else { //finally if there is no error code then I just simply need to update the level with the new course
         setPlanData(prev => ({
           ...prev,
           levels: {
             ...prev.levels,
-            [isAddedNewCourse.level]: [...(prev.levels?.[isAddedNewCourse.level] || []), isAddedNewCourse.course]
+            [isAddedNewCourse.level]: [...(prev.levels?.[isAddedNewCourse.level]), isAddedNewCourse.course]
           }
         }));
         setPopupMessage(isAddedNewCourse.course + " course has been added successfully to " + isAddedNewCourse.level)
@@ -75,8 +78,8 @@ const PlanDetailsPage = () => {
     }
   }, [isAddedNewCourse]);
 
-  const fetchCourses = async () => {
-    try {
+  const fetchCourses = async () => { //this function is called when entering the page and when refreshed
+    try { //also I used this fucntion to revart back the delete if it wasn't succsful
       const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/getPlans`, {
         method: "GET",
@@ -105,38 +108,36 @@ const PlanDetailsPage = () => {
 
   };
 
-  useEffect(() => {
+  useEffect(() => { //this triggers when I want to show popup message 
     if (popupMessage) {
       const timer = setTimeout(() => {
         setPopupMessage(null);
       }, 3000); //3 sec for the upper message to disaper
-      return () => clearTimeout(timer);
+      return () => clearTimeout(timer); //ensures that any previously scheduled timer is cancelled
     }
   }, [popupMessage]);
 
   useEffect(() => {
-    if (deleteCourseFromPlan && deleteCourseFromPlanLevel) {
-      //setIsLoading(true)
+    if (deleteCourseFromPlan && deleteCourseFromPlanLevel) { //this is triggerd when a user delete a course so the ui will get updated
 
       setPlanData(prev => ({
         ...prev,
         levels: {
           ...prev.levels,
-          [deleteCourseFromPlanLevel]: prev.levels[deleteCourseFromPlanLevel].filter(course => course !== deleteCourseFromPlan)
+          [deleteCourseFromPlanLevel]: prev.levels[deleteCourseFromPlanLevel].filter(course => course !== deleteCourseFromPlan) //delete the wanted course from the ui
         }
       }));
-      sendDeleteCourse().finally(() => {
-        //setIsLoading(false)
-        setDeleteCourseFromPlan(null);
+      sendDeleteCourse().finally(() => { //then send a fetch requiest in the background
+        setDeleteCourseFromPlan(null); //if fails it will revert that change in the catch
         setDeleteCourseFromPlanLevel(null);
       });
     }
   }, [deleteCourseFromPlan, deleteCourseFromPlanLevel]);
 
-  const sendDeleteCourse = async () => {
-    let fixedPlanLevel = deleteCourseFromPlanLevel;
+  const sendDeleteCourse = async () => { //here is the fetch requiest
+    let fixedPlanLevel = deleteCourseFromPlanLevel;//here I handled the diffrent between extra level and normal level
     if (fixedPlanLevel.startsWith("Level")) {
-      fixedPlanLevel = parseInt(fixedPlanLevel.replace("Level", "").trim());
+      fixedPlanLevel = parseInt(fixedPlanLevel.replace("Level", "").trim()); //here I get the number only as an int value
     }
 
     try {
@@ -161,20 +162,26 @@ const PlanDetailsPage = () => {
 
   };
 
-  const handleClickConfirm = () => {
-    navigate("/AdminStudyPlansPage");
-  };
 
 
-  const sortedLevelKeys = planData?.levels ? Object.keys(planData.levels).sort((a, b) => {
-    if (a === "Extra") return 1;
-    if (b === "Extra") return -1;
-    const levelA = parseInt(a.split(" ")[1], 10);
-    const levelB = parseInt(b.split(" ")[1], 10);
-    if (isNaN(levelA)) return 1;
-    if (isNaN(levelB)) return -1;
-    return levelA - levelB;
-  }) : [];
+
+ // here we calculate sorted keys for the plan levels to ensure consistent display order.
+ const sortedLevelKeys = planData?.levels // check if planData and planData.levels exist
+ ? Object.keys(planData.levels)
+   .sort((a, b) => { // we sort the keys using a custom comparison function
+     // here we always place the Extra level at the end.
+     if (a === "Extra") return 1; // if a = extra then a should come after b
+     if (b === "Extra") return -1; // if b = extra then b should come after a
+
+     const levelA = parseInt(a.split(" ")[1], 10); // get number after space for 'a'
+     const levelB = parseInt(b.split(" ")[1], 10); // get number after space for 'b'
+
+     // this is for safety if there is other levels not from level x or extra then put it after last level and before the extra level
+     if (isNaN(levelA)) return 1;
+     if (isNaN(levelB)) return -1;
+
+     return levelA - levelB;
+   }) : [];
 
   if (isLoading) {
     return (
@@ -183,15 +190,6 @@ const PlanDetailsPage = () => {
       </div>
     );
   }
-
-  if (!planData) {
-    return (
-         <div className="flex min-h-screen items-center justify-center bg-gray-100">
-            <p className="text-gray-600">Loading plan details...</p>
-        </div>
-    );
-  }
-
 
   return (
     <>
@@ -257,25 +255,24 @@ const PlanDetailsPage = () => {
           </div>
 
 
-          {isPopUpClicked && (
+          {isPopUpClicked && ( 
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-              onClick={() => setIsPopUpClicked(false)}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" //the background if the popup
+              onClick={() => setIsPopUpClicked(false)} //if clicked anywhere then close the popup
             >
-              <div onClick={(e) => e.stopPropagation()}>
-                <ShowCoursesPopUp
+              <div onClick={(e) => e.stopPropagation()}> {/* this to provent the popup from closing if we click on it */}
+                <ShowCoursesPopUp //show the compnet with the values I have and then it will show the popup based on those values
                   parentCourse={parentCourse}
                   planID={planID}
                   planLevel={planLevel}
                   setIsAddedNewCourse={setIsAddedNewCourse}
-                  setIsLoadingForPage={setIsLoading}
                 />
               </div>
             </div>
 
           )}
 
-          {popupMessage && (
+          {popupMessage && ( //this for the notifcation message
             <div
               className="fixed bottom-5 left-1/2 z-50 w-auto -translate-x-1/2 transform cursor-pointer rounded-lg bg-secondary p-4 text-center text-sm font-medium text-gray-800 shadow-lg"
               onClick={() => setPopupMessage(null)}

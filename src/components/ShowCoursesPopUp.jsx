@@ -1,20 +1,22 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
-const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse, setIsLoadingForPage }) => {
+const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse }) => {
   const backendIp = "http://127.0.0.1:5000"; // Backend IP domain
-  const [allCourses, setAllCourses] = useState([]); // State for the list of courses
-  const [isCreatingCourse, setIsCreatingCourse] = useState(false); // Toggle form visibility
-  const [department, setDepartment] = useState(""); // Form field: department
-  const [courseNumber, setCourseNumber] = useState(""); // Form field: course_number
-  const [courseName, setCourseName] = useState(""); // Form field: course_name
-  const [hours, setHours] = useState(""); // Form field: hours
-  const [updateTheTable, setUpdateTheTable] = useState(false); // Trigger table update
-  const [localParentCourse, setLocalParentCourse] = useState(parentCourse); // Local parent course state
+  const [allCourses, setAllCourses] = useState([]);
+  const [allCoursesBackUp,setAllCoursesBackUp] = useState([])
+  const [isCreatingCourse, setIsCreatingCourse] = useState(false);
+  const [department, setDepartment] = useState("");
+  const [courseNumber, setCourseNumber] = useState("");
+  const [courseName, setCourseName] = useState("");
+  const [hours, setHours] = useState("");
+  const [updateTheTable, setUpdateTheTable] = useState(false);
+  const [localParentCourse, setLocalParentCourse] = useState(parentCourse);
   const [isLoading, setIsLoading] = useState(true);
   const [courseThatWantToBeDeleted, setCourseThatWantToBeDeleted] = useState(null)
-  const [prerequisitesCourseThatWantToBeDeleted,setPrerequisitesCourseThatWantToBeDeleted]=useState(null)
-  const [parentPrerequisitesCourseThatWantToBeDeleted,setParentPrerequisitesCourseThatWantToBeDeleted] = useState(null)
+  const [prerequisitesCourseThatWantToBeDeleted, setPrerequisitesCourseThatWantToBeDeleted] = useState(null)
+  const [parentPrerequisitesCourseThatWantToBeDeleted, setParentPrerequisitesCourseThatWantToBeDeleted] = useState(null)
+  const [search,setSearch] = useState("")
   const { user } = useAuth(); // Get current user from AuthContext
 
   // Fetch courses when updateTheTable changes
@@ -23,6 +25,14 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
     fetchCourses().finally(() => setIsLoading(false)); // Set loading to false when fetch completes
     setUpdateTheTable(false);
   }, [updateTheTable, user]);
+
+  useEffect(() => {
+    const searchToLower= search.toLowerCase()
+    setAllCourses(allCoursesBackUp.filter((course) => {
+      const courseId = (course.course_id).toLowerCase();
+      return courseId.includes(searchToLower);}))
+  }, [search]);
+
 
   // Function to fetch courses from the backend
   const fetchCourses = async () => {
@@ -39,11 +49,13 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
       setAllCourses(data.courses);
+      setAllCoursesBackUp(data.courses)
     } catch (error) {
       console.error("Error fetching courses:", error);
       setAllCourses([]);
+      setAllCoursesBackUp([])
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -85,15 +97,15 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
   };
 
   useEffect(() => {
-    if(courseThatWantToBeDeleted){
-    handleDeleteCourse().finally(() => {
-      setCourseThatWantToBeDeleted(null)
-    });
-  }
+    if (courseThatWantToBeDeleted) {
+      handleDeleteCourse().finally(() => {
+        setCourseThatWantToBeDeleted(null)
+      });
+    }
   }, [courseThatWantToBeDeleted]);
 
   const handleDeleteCourse = async () => {
-    const courseThatWantToBeDeletedTemp = courseThatWantToBeDeleted.department +"-"+courseThatWantToBeDeleted.course_number
+    const courseThatWantToBeDeletedTemp = courseThatWantToBeDeleted.department + "-" + courseThatWantToBeDeleted.course_number
     try {
       const token = await user.getIdToken();
       const response = await fetch(`${backendIp}/deleteCourse`, {
@@ -102,32 +114,32 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
           Authorization: `${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({course_id: courseThatWantToBeDeletedTemp}),
+        body: JSON.stringify({ course_id: courseThatWantToBeDeletedTemp }),
       });
-      if (!response.ok){
-        if(response.status===409){
+      if (!response.ok) {
+        if (response.status === 409) {
           throw new Error(`Failed to Delete course. Please remove any courses that has this course as prerequisite First.`);
         }
-      else{
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
       }
-    }
       setUpdateTheTable(true);
-      alert(courseThatWantToBeDeletedTemp+" course has been delete successfully");
+      alert(courseThatWantToBeDeletedTemp + " course has been delete successfully");
     } catch (error) {
       console.error("Error Deleteing course:", error);
       alert(error);
     }
   };
 
-  useEffect(()=>{
-    if(prerequisitesCourseThatWantToBeDeleted){
+  useEffect(() => {
+    if (prerequisitesCourseThatWantToBeDeleted) {
       handleDeletingPrerequisite().finally(() => {
         setPrerequisitesCourseThatWantToBeDeleted(null)
         setParentPrerequisitesCourseThatWantToBeDeleted(null)
       });
     }
-  },[prerequisitesCourseThatWantToBeDeleted])
+  }, [prerequisitesCourseThatWantToBeDeleted])
 
   const handleDeletingPrerequisite = async () => {
     // Store IDs before the async call might clear them in the finally block
@@ -152,8 +164,8 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
         }),
       });
 
-      if (!response.ok){
-          throw new Error(`Failed to Delete course prerequisite. Status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to Delete course prerequisite. Status: ${response.status}`);
       }
 
       // update UI Locally
@@ -172,12 +184,29 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
           return course;
         })
       );
+
+      setAllCoursesBackUp(prevCourses =>
+        prevCourses.map(course => {
+          const currentCourseId = `${course.department}-${course.course_number}`;
+          // find the parent course whose prerequisite was deleted
+          if (currentCourseId === parentCourseIdOfDeletedPrereq) {
+            // return a new course object with the prerequisite filtered out
+            return {
+              ...course,
+              prerequisites: course.prerequisites.filter(prereq => prereq !== prerequisiteIdToDelete)
+            };
+          }
+          // otherwise, return the course unchanged
+          return course;
+        })
+      );
+
     } catch (error) {
       console.error("Error Deleting course prerequisite:", error);
       alert(`Error: ${error.message || 'Could not delete prerequisite.'}`);
     }
 
-};
+  };
 
 
 
@@ -202,17 +231,17 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
       });
       const data = await response.json();
       console.log(data)
-      if(data.frontEndMessage == 101 ){
-        setIsAddedNewCourse({level: planLevel,course:course_ide,alreadyAdded:true})
+      if (data.frontEndMessage == 101) {
+        setIsAddedNewCourse({ level: planLevel, course: course_ide, alreadyAdded: true })
       }
-      else if(data.frontEndMessage ==102){
-        setIsAddedNewCourse({level: planLevel,course:course_ide,moved:true,oldLevevl:data.old_level_key})
+      else if (data.frontEndMessage == 102) {
+        setIsAddedNewCourse({ level: planLevel, course: course_ide, moved: true, oldLevevl: data.old_level_key })
       }
-      else{
-        setIsAddedNewCourse({level: planLevel,course:course_ide})
+      else {
+        setIsAddedNewCourse({ level: planLevel, course: course_ide })
       }
       if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
     } catch (error) {
@@ -231,77 +260,99 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
 
     // check if the prerequisite already exists locally 
     const parentCourseInState = allCourses.find(c =>
-        `${c.department}-${c.course_number}` === parent_course_id
+      `${c.department}-${c.course_number}` === parent_course_id
     );
 
     if (parentCourseInState && Array.isArray(parentCourseInState.prerequisites) && parentCourseInState.prerequisites.includes(prerequisite_course_id)) {
-        alert(`${prerequisite_course_id} is already a prerequisite for ${parent_course_id}.`);
-        setLocalParentCourse(null);
-        return; 
+      alert(`${prerequisite_course_id} is already a prerequisite for ${parent_course_id}.`);
+      setLocalParentCourse(null);
+      return;
     }
     try {
-        const token = await user.getIdToken();
-        const response = await fetch(`${backendIp}/addCoursePre`, {
-            method: "POST",
-            headers: {
-                Authorization: `${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ course_id: parent_course_id, prerequisite: prerequisite_course_id }),
-        });
+      const token = await user.getIdToken();
+      const response = await fetch(`${backendIp}/addCoursePre`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ course_id: parent_course_id, prerequisite: prerequisite_course_id }),
+      });
 
-        if (!response.ok){
-            if(response.status === 409){
-                throw new Error(`Failed to add prerequisite. Conflict detected.`);
-            } else {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
+      if (!response.ok) {
+        if (response.status === 409) {
+          throw new Error(`Failed to add prerequisite. Conflict detected.`);
+        } else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
+      }
 
-        //Update UI Locally
-        setAllCourses(prevCourses =>
-            prevCourses.map(course => {
-                const currentCourseId = `${course.department}-${course.course_number}`;
-                if (currentCourseId === parent_course_id) {
-                    // ensure prerequisites array exists and is an array
-                    const existingPrerequisites = Array.isArray(course.prerequisites) ? course.prerequisites : [];
-                    // return new course object with the new prerequisite added
-                    return {
-                        ...course,
-                        // add the new prerequisite to the existing list
-                        prerequisites: [...existingPrerequisites, prerequisite_course_id]
-                    };
-                }
-                return course; 
-            })
-        );
+      //Update UI Locally
+      setAllCourses(prevCourses =>
+        prevCourses.map(course => {
+          const currentCourseId = `${course.department}-${course.course_number}`;
+          if (currentCourseId === parent_course_id) {
+            // ensure prerequisites array exists and is an array
+            const existingPrerequisites = Array.isArray(course.prerequisites) ? course.prerequisites : [];
+            // return new course object with the new prerequisite added
+            return {
+              ...course,
+              // add the new prerequisite to the existing list
+              prerequisites: [...existingPrerequisites, prerequisite_course_id]
+            };
+          }
+          return course;
+        })
+      );
 
     } catch (error) {
-        console.error("Error adding prerequisite:", error);
-        alert(`Error: ${error.message || 'Could not add prerequisite.'}`);
+      console.error("Error adding prerequisite:", error);
+      alert(`Error: ${error.message || 'Could not add prerequisite.'}`);
 
     }
     finally {
-        setLocalParentCourse(null);
+      setLocalParentCourse(null);
     }
-};
+  };
 
   // Dynamic header based on context
   let header;
+
+  const searchBar = (<div className="mb-6 p-4 bg-gray-200 rounded-lg shadow">
+    <input
+      type="text"
+      placeholder="Search by Course Code (e.g., CPIT-250)..."
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      className="w-full px-4 py-2 border border-gray rounded-md shadow-sm bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:primary-dark focus:border-transparent transition duration-150 ease-in-out"
+    />
+  </div>)
+
   if (localParentCourse) {
     header = (
-      <h2 className="mb-4 text-xl font-semibold text-gray-800">
-        Select prerequisite for <span className="font-bold text-primary-dark">{localParentCourse.department}{localParentCourse.course_number}</span>
-      </h2>
+      <>
+        <h2 className="mb-4 text-xl font-semibold text-gray-800">
+          Select prerequisite for <span className="font-bold text-primary-dark">{localParentCourse.department}{localParentCourse.course_number}</span>
+        </h2>
+        {searchBar}
+      </>
     );
   } else if (planID) {
     header = (
-      <h2 className="mb-4 text-xl font-semibold text-gray-800">
-        Add course to <span className="font-bold text-primary-dark">{planID}</span> - <span className="font-bold text-secondary-dark">{planLevel}</span>
-      </h2>
+      <>
+        <h2 className="mb-4 text-xl font-semibold text-gray-800">
+          Add course to <span className="font-bold text-primary-dark">{planID}</span> - <span className="font-bold text-secondary-dark">{planLevel}</span>
+        </h2>
+      {searchBar}
+      </>
     );
   } else {
-    header = <h2 className="mb-4 text-xl font-semibold text-gray-800">Available Courses</h2>;
+    header = (
+      <>
+        <h2 className="mb-4 text-xl font-semibold text-gray-800">Available Courses</h2>
+        {searchBar}
+      </>
+    )
   }
 
   return (
@@ -390,7 +441,7 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
         </>
       ) : isLoading ? (
         <div className="flex flex-grow items-center justify-center">
-             <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
         </div>
       ) : (
         <>
@@ -403,29 +454,29 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
                   className="rounded-md border border-gray-200 bg-white p-4"
                 >
                   <h3 className="text-base font-semibold text-gray-900">
-                    {course.department}{course.course_number} - {course.course_name} ({course.hours} hrs)
+                    {course.course_id}: {course.course_name} ({course.hours} hours)
                   </h3>
                   {course.prerequisites && course.prerequisites.length > 0 ? (
                     <div className="mt-2">
-                        <span className=" font-medium text-gray-500">Prerequisites:</span>
-                        <ul className="ml-2 mt-1 space-y-1">
+                      <span className=" font-medium text-gray-500">Prerequisites:</span>
+                      <ul className="ml-2 mt-1 space-y-1">
                         {course.prerequisites.map((prereq, index) => (
-                            <li key={index} className="flex items-center justify-between rounded bg-gray-100 px-2 py-1">
-                                <span className="text-sm text-gray-700">{prereq}</span>
-                                <button onClick={()=>{
-                                setPrerequisitesCourseThatWantToBeDeleted(prereq)
-                                setParentPrerequisitesCourseThatWantToBeDeleted(course.department+"-"+course.course_number)
-                                }}
-                                title={`Delete prerequisite ${prereq}`}
-                                className="ml-2 flex h-8 w-8 items-center justify-center rounded-full p-1.5 text-danger hover:bg-danger/10 focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-1"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}> {/* Adjusted strokeWidth */}
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </li>
+                          <li key={index} className="flex items-center justify-between rounded bg-gray-100 px-2 py-1">
+                            <span className="text-sm text-gray-700">{prereq}</span>
+                            <button onClick={() => {
+                              setPrerequisitesCourseThatWantToBeDeleted(prereq)
+                              setParentPrerequisitesCourseThatWantToBeDeleted(course.department + "-" + course.course_number)
+                            }}
+                              title={`Delete prerequisite ${prereq}`}
+                              className="ml-2 flex h-8 w-8 items-center justify-center rounded-full p-1.5 text-danger hover:bg-danger/10 focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-1"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}> {/* Adjusted strokeWidth */}
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </li>
                         ))}
-                        </ul>
+                      </ul>
                     </div>
                   ) : (
                     <p className="mt-2 text-gray-500">No prerequisites</p>
@@ -458,9 +509,9 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
                     )}
 
                     {localParentCourse && !(localParentCourse.department === course.department && localParentCourse.course_number === course.course_number) && (
-                       <button
+                      <button
                         onClick={() => handleAddingPrerequisite(course, localParentCourse)}
-                          className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                        className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                       >
                         Add as Prerequisite
                       </button>
@@ -472,21 +523,21 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
             </ul>
           </div>
           <div className="mt-4 flex flex-col gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:justify-between">
-                <button
-                    onClick={handleCreateNewCourse}
-                    className="inline-flex w-full justify-center rounded-md border border-transparent bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 sm:w-auto"
-                >
-                    Create New Course
-                </button>
-                {localParentCourse && <button //if there is set prerequist then show this button else hide it
-                    onClick={() => {
-                    setLocalParentCourse(null)
-                    }}
-                    className="inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2 sm:w-auto sm:order-first"
-                >
-                    Cancel Prerequisite Selection
-                </button>}
-            </div>
+            <button
+              onClick={handleCreateNewCourse}
+              className="inline-flex w-full justify-center rounded-md border border-transparent bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 sm:w-auto"
+            >
+              Create New Course
+            </button>
+            {localParentCourse && <button //if there is set prerequist then show this button else hide it
+              onClick={() => {
+                setLocalParentCourse(null)
+              }}
+              className="inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2 sm:w-auto sm:order-first"
+            >
+              Cancel Prerequisite Selection
+            </button>}
+          </div>
         </>
       )}
     </div>
