@@ -223,6 +223,7 @@ def generate_time_slots():
     """Generates lists of valid 50-min and 80-min time slots."""
     slots_50_min = []
     slots_80_min = []
+    #list of maps , where each map represent a slot 
     days_50 = ["Sunday", "Tuesday", "Thursday"]
     days_80 = ["Monday", "Wednesday"]
     break_start = time(12, 0)
@@ -230,28 +231,32 @@ def generate_time_slots():
     end_of_day = time(18, 0) # 6 PM
 
     # Generate 50-min slots (Sun, Tue, Thu)
-    for day in days_50:
+    for day in days_50:#for each day (sun,true,thu)
         current_time = time(9, 0)
-        while current_time < end_of_day:
-            slot_end_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=50)).time()
+        while current_time < end_of_day:#as long as time isn't the end of day which is 6:00 pm currently for better ai control
+            slot_end_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=50)).time()#the time slot is basically current time , until the end ofthe slot which si based on adding 50 minutes to the current time
             if current_time < break_start and slot_end_time > break_start:
-                 current_time = break_end; continue
+                 #if we enter here , this means slot start before break but ends during or after break. not valid time slot
+                 current_time = break_end; continue#skip the current slot and start after break ends
             if current_time >= break_start and current_time < break_end:
-                 current_time = break_end; continue
-            if slot_end_time > end_of_day: break
-            slots_50_min.append({"day": day, "start": current_time.strftime("%H:%M"), "end": slot_end_time.strftime("%H:%M")})
+                 #if we enter here , this means that the time slot start during the break. not valid
+                 current_time = break_end; continue#skip the current slot and start after break
+            if slot_end_time > end_of_day: break#if a slot ends after the end of day, not valid skip
+            slots_50_min.append({"day": day, "start": current_time.strftime("%H:%M"), "end": slot_end_time.strftime("%H:%M")})#if we reach here , slot is valid, add slot information to the list as a map, 
             current_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=60)).time()
 
     # Generate 80-min slots (Mon, Wed)
-    for day in days_80:
+    for day in days_80:#for each day mon,wed
         current_time = time(9, 0)
         while current_time < end_of_day:
             slot_end_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=80)).time()
             if current_time < break_start and slot_end_time > break_start:
-                 current_time = break_end; continue
+                 #if we enter here , this means slot start before break but ends during or after break. not valid time slot
+                 current_time = break_end; continue#skip the current slot and start after break ends
             if current_time >= break_start and current_time < break_end:
-                 current_time = break_end; continue
-            if slot_end_time > end_of_day: break
+                 #if we enter here , this means that the time slot start during the break. not valid
+                 current_time = break_end; continue#skip the current slot and start after break
+            if slot_end_time > end_of_day: break#if a slot ends after the end of day, not valid skip
             slots_80_min.append({"day": day, "start": current_time.strftime("%H:%M"), "end": slot_end_time.strftime("%H:%M")})
             current_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=90)).time()
 
@@ -1418,18 +1423,14 @@ def delete_course_completely(decoded_token):
         return jsonify({"error": "Failed to delete course due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getGraduatingStudents', methods=['POST'])
-@admin_required # Only admins should access this list
+@admin_required 
 def get_graduating_students_from_form(decoded_token):
     """
-    Retrieves details of students marked as 'graduating' within a specific form's responses.
-    Requires admin authentication.
-    Expects JSON: {"form_id": "FORM_ID"}
-    Returns a JSON object containing the form_id and a list of graduating student objects,
-    each containing: university_student_id, name, email, gpa.
+    Retrieves details of students that are graduating according to a specific form
     """
-    form_id = None # Initialize for error logging
+    form_id = None # Initialize data
     try:
-        # --- 1. Get form_id from JSON Request Body ---
+        # Step 1: Get form_id from request and validate
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1439,29 +1440,31 @@ def get_graduating_students_from_form(decoded_token):
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
             return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 409
         form_id = form_id.strip()
-        # --- End form_id retrieval ---
+        
 
-        # --- 2. Fetch Form Document ---
+        # Step 2: Fetch Form Document 
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
 
         if not form_doc.exists:
              return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
-        # --- 3. Identify Graduating Student UIDs ---
+        # Step 3: Identify Graduating Student UIDs 
         form_data = form_doc.to_dict()
         form_responses_map = form_data.get('Form_Responses', {})
         graduating_student_uids = []
 
         if isinstance(form_responses_map, dict):
             for student_uid, response_data in form_responses_map.items():
+                #this will loop across every response on the form, because the form_responses is 
+                #map that contains key and values, the key is UID, the value is another map
                 # Check if response_data is a dict and has the is_graduating flag set to True
                 if isinstance(response_data, dict) and response_data.get('is_graduating') is True:
                     graduating_student_uids.append(student_uid)
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
 
-        # --- 4. Fetch Details for Graduating Students (Batch Fetch) ---
+        # Step 4: Fetch Details for Graduating Students 
         graduating_students_details = []
         if graduating_student_uids: # Only proceed if we found graduating students
             student_refs = [db.collection('Students').document(uid) for uid in graduating_student_uids]
@@ -1470,11 +1473,10 @@ def get_graduating_students_from_form(decoded_token):
             for student_doc in student_docs:
                 if student_doc.exists:
                     student_data = student_doc.to_dict()
-                    # *** Get the University Student ID from the document ***
-                    university_student_id = student_data.get("Student_ID", "N/A_ID") # Key from update_student_data
+                    # Get the University Student ID from the document 
+                    university_student_id = student_data.get("Student_ID", "N/A_ID") 
 
                     student_detail = {
-                        # *** Changed key name and value source ***
                         "university_student_id": university_student_id,
                         "name": student_data.get("name", "N/A"),
                         "email": student_data.get("email", "N/A"),
@@ -1484,11 +1486,10 @@ def get_graduating_students_from_form(decoded_token):
                 else:
                     # Log if a student UID from responses doesn't have a matching student document
                     print(f"Warning: Student document not found for UID: {student_doc.id} from form {form_id} responses.")
-                    # Optionally include an entry indicating the missing data:
-                    # graduating_students_details.append({"university_student_id": "MISSING", "error": "Student profile not found"})
+                    
 
 
-        # --- 5. Return the List (with form_id) ---
+        # Step 5: Return the List with form_id 
         return jsonify({
             "form_id": form_id,
             "graduating_students": graduating_students_details
@@ -1503,20 +1504,17 @@ def get_graduating_students_from_form(decoded_token):
         return jsonify({"error": "Failed to retrieve graduating students due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getGraduatingStudentCourses', methods=['POST'])
-@admin_required # This report seems suitable for admins
+@admin_required 
 def get_graduating_student_courses(decoded_token):
     """
-    Retrieves detailed information about the unique courses selected by students
-    marked as 'graduating' within a specific form's responses.
+    Retrieves detailed information about the unique courses selected by graduating students within a specific form
     Includes a count of how many graduating students selected each course.
-    Requires admin authentication.
-    Expects JSON: {"form_id": "FORM_ID"}
     Returns a map of course data, keyed by course_id. Each value contains
     course details (excluding prerequisites) and the selection count.
     """
-    form_id = None # Initialize for error logging
+    form_id = None # Initialize data
     try:
-        # --- 1. Get form_id from JSON Request Body ---
+        # Step 1: Get form_id from request and validate
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1528,35 +1526,36 @@ def get_graduating_student_courses(decoded_token):
         form_id = form_id.strip()
         # --- End form_id retrieval ---
 
-        # --- 2. Fetch Form Document ---
+        # Step 2: Fetch Form Document 
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
 
         if not form_doc.exists:
              return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
-        # --- 3. Collect Course Selections & Count from Graduating Students ---
+        # Step 3: Collect Course Selections & Count from Graduating Students 
         form_data = form_doc.to_dict()
         form_responses_map = form_data.get('Form_Responses', {})
         # Use Counter to store counts for each course ID
-        graduating_course_counts = collections.Counter()
+        graduating_course_counts = collections.Counter()#this is a map basically, we just updates it with values, the values will be keys, the value with the key will be how many times it got updated
+        #this is very useful, we just update then it finds the corresponding key, and increment its counter. so every key has a counter
 
         if isinstance(form_responses_map, dict):
             for student_uid, response_data in form_responses_map.items():
                 # Check if response_data is valid and student is graduating
-                if isinstance(response_data, dict) and response_data.get('is_graduating') is True:
+                if isinstance(response_data, dict) and response_data.get('is_graduating') is True:#this means the response belongs to a graduating student
                     selected_courses = response_data.get('selected_courses', [])
                     if isinstance(selected_courses, list):
                          # Clean and update counts
                          cleaned_courses = [c.strip() for c in selected_courses if isinstance(c, str) and c.strip()]
-                         graduating_course_counts.update(cleaned_courses)
+                         graduating_course_counts.update(cleaned_courses)#the counter will increment the counter of any course here, if its a new course then it creates it.
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
 
         # Get the set of unique course IDs that were selected by graduating students
-        unique_course_ids = list(graduating_course_counts.keys())
+        unique_course_ids = list(graduating_course_counts.keys())#list of courses graduates wants to study
 
-        # --- 4. Fetch Details for the Collected Course IDs (Batch Fetch) ---
+        # Step 4: Fetch Details for the Collected Course IDs 
         course_details_map_with_count = {}
         if unique_course_ids: # Only proceed if any courses were selected
             course_refs_to_get = [db.collection('Courses').document(cid) for cid in unique_course_ids]
@@ -1568,12 +1567,12 @@ def get_graduating_student_courses(decoded_token):
                     course_data = course_doc.to_dict()
                     # Extract desired details (excluding prerequisites)
                     details = {
-                        "title": course_data.get("course_name", "N/A"), # Assuming field name is course_name
+                        "title": course_data.get("course_name", "N/A"), #course name
                         "hours": course_data.get("hours", 0)
                         # Add other relevant course details here if needed
                     }
                     # Combine details and count
-                    course_details_map_with_count[course_id] = {
+                    course_details_map_with_count[course_id] = {#map where keys are the courses students wants, the value associated with the course is its details and how many students want it
                         "details": details,
                         "graduating_student_count": graduating_course_counts.get(course_id, 0) # Get count from Counter
                     }
@@ -1586,10 +1585,9 @@ def get_graduating_student_courses(decoded_token):
                     }
 
 
-        # --- 5. Return the Course Details Map with Counts ---
+        # Step 5: Return the Course Details Map with Counts 
         return jsonify({
             "form_id": form_id,
-            # Renamed key slightly for clarity
             "graduating_student_course_selections": course_details_map_with_count
         }), 200
 
@@ -1602,19 +1600,17 @@ def get_graduating_student_courses(decoded_token):
         return jsonify({"error": "Failed to retrieve graduating student courses due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getFormCourseStats', methods=['POST'])
-@admin_required # Admin report
+@admin_required 
 def get_form_course_stats(decoded_token):
     """
     Retrieves general statistics for each course selected within a specific form.
-    Requires admin authentication.
-    Expects JSON: {"form_id": "FORM_ID"}
     Returns a map where keys are course IDs. Each value contains course details
     (title, hours) and counts for total selections, graduating selections,
     and undergraduate selections.
     """
-    form_id = None # Initialize for error logging
+    form_id = None # Initialize data
     try:
-        # --- 1. Get form_id from JSON Request Body ---
+        # Step 1: Get form_id from request and validate
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1624,16 +1620,16 @@ def get_form_course_stats(decoded_token):
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
             return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 409
         form_id = form_id.strip()
-        # --- End form_id retrieval ---
+        
 
-        # --- 2. Fetch Form Document ---
+        # Step 2: Fetch Form Document 
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
 
         if not form_doc.exists:
              return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
-        # --- 3. Calculate Course Counts (Total and Graduating) ---
+        # Step 3: Calculate Course Counts (Total and Graduating) 
         form_data = form_doc.to_dict()
         form_responses_map = form_data.get('Form_Responses', {})
         course_total_counts = collections.Counter()
@@ -1648,17 +1644,17 @@ def get_form_course_stats(decoded_token):
                     if isinstance(selected_courses, list):
                          cleaned_courses = [c.strip() for c in selected_courses if isinstance(c, str) and c.strip()]
                          # Update total counts for all selected courses
-                         course_total_counts.update(cleaned_courses)
+                         course_total_counts.update(cleaned_courses)#normal counter for everyone
                          # Update graduating counts only if the flag is true
                          if is_graduating:
-                              course_graduating_counts.update(cleaned_courses)
+                              course_graduating_counts.update(cleaned_courses)#this is a counter for courses that graduating students wants
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
 
         # Get the set of unique course IDs involved
         unique_course_ids = list(course_total_counts.keys())
 
-        # --- 4. Fetch Details for the Involved Course IDs (Batch Fetch) ---
+        # Step 4: Fetch Details for the Involved Course IDs 
         course_stats_map = {}
         if unique_course_ids: # Only proceed if any courses were selected
             course_refs_to_get = [db.collection('Courses').document(cid) for cid in unique_course_ids]
@@ -1676,7 +1672,7 @@ def get_form_course_stats(decoded_token):
                       print(f"Warning: Course document not found for selected ID: {course_doc.id}")
                       course_details_temp[course_doc.id] = {"error": "Course details not found"}
 
-            # --- 5. Combine Details and Counts ---
+            # Step 5: Combine Details and Counts 
             for course_id in unique_course_ids:
                 total_count = course_total_counts.get(course_id, 0)
                 graduating_count = course_graduating_counts.get(course_id, 0)
@@ -1689,7 +1685,7 @@ def get_form_course_stats(decoded_token):
                     "undergraduate_selected": undergrad_count
                 }
 
-        # --- 6. Return the Course Statistics Map ---
+        # Step 6: Return the Course Statistics Map 
         return jsonify({
             "form_id": form_id,
             "course_stats": course_stats_map
@@ -1704,19 +1700,22 @@ def get_form_course_stats(decoded_token):
         return jsonify({"error": "Failed to retrieve course statistics due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getCoursePriorityList', methods=['POST'])
-@admin_required # Admin report
+@admin_required 
 def get_course_priority_list(decoded_token):
     """
     Retrieves a prioritized list of students who selected a specific course in a form.
-    Requires admin authentication.
-    Expects JSON: {"form_id": "FORM_ID", "course_id": "COURSE_ID"}
     Prioritizes graduating students first, then sorts remaining students by GPA descending.
     Returns a sorted list of student objects (university_student_id, name, email, gpa, is_graduating).
+    #first we want to return a list containing the information of all students who want to study a certain course
+    #the list is just many maps, with each map containing a studnets information.
+    #this list is the un priotized list, now just sort this list maps, by using a function that looks at a certain map attributes which is graduating and gpa.
+    #then now you have a prioratized list of students with their information who want to study a certain course.
+    #now return that list and other things.
     """
-    form_id = None # Initialize for error logging
-    course_id_target = None # Initialize for error logging
+    form_id = None # initalizing data and validate as usual
+    course_id_target = None 
     try:
-        # --- 1. Get form_id and course_id from JSON Request Body ---
+        # Step 1: form_id and course_id from request 
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1730,18 +1729,20 @@ def get_course_priority_list(decoded_token):
             return jsonify({"error": "Missing or invalid 'course_id'"}), 400
         form_id = form_id.strip()
         course_id_target = course_id_target.strip()
-        # --- End input retrieval ---
+        
 
-        # --- 2. Fetch Form Document ---
+        # Step 2: Fetch Form Document 
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
         if not form_doc.exists:
              return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
-        # --- 3. Identify Students Selecting the Target Course ---
+        # Step 3: Identify Students Selecting the Target Course 
         form_data = form_doc.to_dict()
         form_responses_map = form_data.get('Form_Responses', {})
         interested_students_raw = [] # Store {'uid': ..., 'is_graduating': ...}
+        #a list of maps of students who want to study the course we are focusing on and if they are graduates or not
+        #each entry is a student that we care about and his simple information
 
         if isinstance(form_responses_map, dict):
             for student_uid, response_data in form_responses_map.items():
@@ -1755,46 +1756,45 @@ def get_course_priority_list(decoded_token):
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
 
-        # --- 4. Fetch Details for Interested Students (Batch Fetch) ---
+        # Step 4: Fetch Details for Interested Students 
+        #now we want to make a list where each entry represent a student that we care about, but the entry is also a map this time it contains detailed information about the student
         priority_list_unsorted = []
         if interested_students_raw:
             student_uids = [s['uid'] for s in interested_students_raw]
             student_refs = [db.collection('Students').document(uid) for uid in student_uids]
             student_docs = db.get_all(student_refs)
 
-            grad_status_lookup = {s['uid']: s['is_graduating'] for s in interested_students_raw}
+            grad_status_lookup = {s['uid']: s['is_graduating'] for s in interested_students_raw}#for fast checking if the student is a graduate or not, used in sorting
 
             for student_doc in student_docs:
                 if student_doc.exists:
-                    student_data = student_doc.to_dict()
+                    student_data = student_doc.to_dict()#get the student information
                     uid = student_doc.id # Firebase UID
                     is_grad = grad_status_lookup.get(uid, False)
-                    # *** Get the University Student ID from the document ***
+                    #  Get the University Student ID from the document 
                     university_student_id = student_data.get("Student_ID", "N/A_ID") # Key from update_student_data
 
                     student_detail = {
-                        # *** Changed key name and value source ***
                         "university_student_id": university_student_id,
                         "name": student_data.get("name", "N/A"),
                         "email": student_data.get("email", "N/A"),
                         "gpa": float(student_data.get("gpa", 0.0)),
                         "is_graduating": is_grad
                     }
-                    priority_list_unsorted.append(student_detail)
+                    priority_list_unsorted.append(student_detail)#here we are doing our goal in step4 , creating a list of maps , where each map is detailed student information
                 else:
                     print(f"Warning: Student document not found for UID: {student_doc.id} who selected course {course_id_target} in form {form_id}.")
-                    # Optionally include placeholder if needed
-                    # priority_list_unsorted.append({"university_student_id": "MISSING", "error": "Student profile not found", "is_graduating": grad_status_lookup.get(student_doc.id, False)})
+                    
 
-        # --- 5. Sort the List by Priority ---
+        # Step 5: Sort the List by Priority 
         def sort_priority(student):
             is_grad = student.get('is_graduating', False)
             gpa = student.get('gpa', 0.0)
-            return (0 if is_grad else 1, -gpa)
+            return (0 if is_grad else 1, -gpa)#we have 2 sorting conditions, if student is graduate he is 0 because ascending order, and its the main thing, after that the gpa but make it negative, again becasue ascending 
 
         priority_list_sorted = sorted(priority_list_unsorted, key=sort_priority)
 
-        # --- 6. Return the Prioritized List ---
+        # Step 6: Return the Prioritized List 
         return jsonify({
             "form_id": form_id,
             "course_id": course_id_target,
@@ -1811,19 +1811,21 @@ def get_course_priority_list(decoded_token):
         return jsonify({"error": "Failed to retrieve course priority list due to an internal server error", "details": str(e)}), 500
 
 @app.route('/getAllCoursePriorityLists', methods=['POST'])
-@admin_required # Admin report
+@admin_required 
 def get_all_course_priority_lists(decoded_token):
     """
     Retrieves prioritized lists of students for ALL courses selected within a specific form.
-    Requires admin authentication.
-    Expects JSON: {"form_id": "FORM_ID"}
     For each course, prioritizes graduating students first, then sorts remaining students by GPA descending.
     Returns a map where keys are course IDs and values are the sorted priority lists for that course.
     Each student object in the list contains: university_student_id, name, email, gpa, is_graduating.
+
+    this function is similar to the previous function, but this time we do it on all courses
+    check previous function for comments and understanding of main functionlity
+    # the result should be a dictionary where keys represent courses, the value will be the prioratized list just as the previous function
     """
-    form_id = None # Initialize for error logging
+    form_id = None # initalize data
     try:
-        # --- 1. Get form_id from JSON Request Body ---
+        # Step 1: form_id from request
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1833,39 +1835,39 @@ def get_all_course_priority_lists(decoded_token):
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
             return jsonify({"error": "Missing or invalid 'form_id'"}), 409
         form_id = form_id.strip()
-        # --- End input retrieval ---
+        
 
-        # --- 2. Fetch Form Document ---
+        # Step 2: Fetch Form Document 
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
         if not form_doc.exists:
              return jsonify({"error": f"Form '{form_id}' not found"}), 404
 
-        # --- 3. Aggregate Student Selections per Course ---
+        # Step 3: Aggregate Student Selections per Course 
         form_data = form_doc.to_dict()
         form_responses_map = form_data.get('Form_Responses', {})
-        # Map course_id -> list of {'uid': ..., 'is_graduating': ...}
-        course_student_map = collections.defaultdict(list)
+        course_student_map = collections.defaultdict(list)#special dictionary, where if there is no key, create it with default value of list 
         all_interested_uids = set() # Keep track of all unique UIDs we need to fetch
 
         if isinstance(form_responses_map, dict):
-            for student_uid, response_data in form_responses_map.items():
+            for student_uid, response_data in form_responses_map.items(): #for every response, get the courses that the students wants to study
                 if isinstance(response_data, dict):
                     selected_courses = response_data.get('selected_courses', [])
                     is_graduating = response_data.get('is_graduating') is True
 
                     if isinstance(selected_courses, list):
-                         for course_id in selected_courses:
+                         for course_id in selected_courses:#for every course the student want to study
                               if isinstance(course_id, str) and course_id.strip():
                                    cleaned_course_id = course_id.strip()
                                    student_info = {"uid": student_uid, "is_graduating": is_graduating}
-                                   course_student_map[cleaned_course_id].append(student_info)
-                                   all_interested_uids.add(student_uid) # Add UID to set for batch fetching
+                                   course_student_map[cleaned_course_id].append(student_info)# add the student information to the dictionary
+                                   #so the course_student_map , is a map, the keys are course id, the value is a list, this list contains many maps , where each map represent a student information who want to study this course
+                                   all_interested_uids.add(student_uid) # Add UID to set for batch fetching later
         else:
              print(f"Warning: Form_Responses field in form {form_id} is not a map.")
 
-        # --- 4. Fetch Details for All Involved Students (Batch Fetch) ---
-        student_details_lookup = {} # Store fetched details: {uid: {name:.., email:.., gpa:.., Student_ID: ...}}
+        # Step 4: Fetch Details for All Involved Students 
+        student_details_lookup = {} # Store fetched details: {uid: {name:.., email:.., gpa:.., Student_ID: ...}} this will be used when creating the priority list for fast look up of data
         if all_interested_uids: # Only fetch if there are students
             student_uids_list = list(all_interested_uids)
             student_refs = [db.collection('Students').document(uid) for uid in student_uids_list]
@@ -1879,9 +1881,9 @@ def get_all_course_priority_lists(decoded_token):
                         "name": student_data.get("name", "N/A"),
                         "email": student_data.get("email", "N/A"),
                         "gpa": float(student_data.get("gpa", 0.0)), # Ensure GPA is float
-                        # *** Fetch the University Student ID ***
+                        # Fetch the University Student ID 
                         "Student_ID": student_data.get("Student_ID", "N/A_ID")
-                    }
+                    }#this is the look up , so know we can get student info details from just using his UID
                 else:
                     print(f"Warning: Student document not found for UID: {uid} referenced in form {form_id} responses.")
                     # Store minimal info if profile missing
@@ -1889,8 +1891,8 @@ def get_all_course_priority_lists(decoded_token):
                          "name": "Profile Not Found", "email": "N/A", "gpa": 0.0, "Student_ID": "MISSING"
                     }
 
-        # --- 5. Build and Sort Priority List for Each Course ---
-        all_priority_lists = {}
+        # Step 5: Build and Sort Priority List for Each Course 
+        all_priority_lists = {}#this is the final priority dictionary , where keys are courses id , and value is PRIORITY list, which contain students maps entries which are sorted.
 
         # Define the sorting key function once
         def sort_priority(student_entry):
@@ -1898,32 +1900,35 @@ def get_all_course_priority_lists(decoded_token):
             gpa = student_entry.get('gpa', 0.0)
             return (0 if is_grad else 1, -gpa) # Graduating first (0), then highest GPA first (-gpa)
 
-        # Iterate through each course that was selected by at least one student
+        #Iterate through each course that was selected by at least one student
+        #for every course we create the priority list for it.
         for course_id, interested_students_raw in course_student_map.items():
             priority_list_unsorted = []
+            #now for each student who want to study the current course, interested_students_raw has many maps , every map is a student 
             for student_info in interested_students_raw:
+                 #the current map refer to a student 
                  uid = student_info['uid']
                  # Combine fetched details with the graduating status from the response
                  details = student_details_lookup.get(uid, {"name": "Error", "email": "Error", "gpa": 0.0, "Student_ID": "ERROR"}) # Fallback
                  priority_list_unsorted.append({
-                     # *** Changed key name and value source ***
                      "university_student_id": details["Student_ID"],
                      "name": details["name"],
                      "email": details["email"],
                      "gpa": details["gpa"],
                      "is_graduating": student_info['is_graduating'] # Use status from response
-                 })
+                 })#add the student to the course's priority list currently unsorted
 
             # Sort the list for this specific course
-            priority_list_sorted = sorted(priority_list_unsorted, key=sort_priority)
+            priority_list_sorted = sorted(priority_list_unsorted, key=sort_priority)#here sort the priorty list entries which are maps , we sort the maps based on 2 of the keys and their vaules, graduating and gpa
             # Add the sorted list to the final result map
-            all_priority_lists[course_id] = priority_list_sorted
+            all_priority_lists[course_id] = priority_list_sorted#add the prioriy list as a value in the map of all priority lists, the key will be the course id 
+            #this is how it would look: Map: {course_id: [sorted_student_list]}
 
 
-        # --- 6. Return the Map of Priority Lists ---
+        # Step 6: Return the Map of Priority Lists 
         return jsonify({
             "form_id": form_id,
-            "course_priority_lists": all_priority_lists # Map: {course_id: [sorted_student_list]}
+            "course_priority_lists": all_priority_lists 
         }), 200
 
     except Exception as e:
@@ -1940,17 +1945,13 @@ def generate_section_schedule(decoded_token):
     """
     Gathers data, prepares and sends a prompt to a Generative AI API
     to generate a section schedule recommendation using the genai.Client structure.
-    Requires admin authentication.
-    Expects JSON: {"form_id": "FORM_ID", "section_capacity": Optional[int], "time_preference": Optional[str]}
-    Valid time_preference options: "MorningAndAfternoonFocus", "AfternoonAndEveningFocus".
-    Default time preference is 'MorningAndAfternoonFocus'.
     Returns the structured JSON response from the LLM API.
-    Uses the 'gemini-2.0-flash' model as requested by user.
+    Uses the 'gemini-2.0-flash' model currently
     """
     form_id = None
-    model_name = None # Initialize for error logging
+    model_name = None # Initialize data
     try:
-        # --- 1. Get Inputs ---
+        # Step 1: Get data from request
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -1958,9 +1959,7 @@ def generate_section_schedule(decoded_token):
         section_capacity = data.get('section_capacity', 25)
         
         time_preference = data.get('time_preference', "MorningAndAfternoonFocus")
-        print(section_capacity)#testing
-        print(time_preference)#testing
-        # Validate inputs
+        # Validate data
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
             return jsonify({"error": "Missing or invalid 'form_id'"}), 409
         if not isinstance(section_capacity, int) or section_capacity <= 0:
@@ -1970,41 +1969,41 @@ def generate_section_schedule(decoded_token):
              return jsonify({"error": f"Invalid 'time_preference'. Valid options: {valid_preferences}"}), 400
         form_id = form_id.strip()
 
-        # --- 2. Fetch Form & Plan Info ---
+        # Step 2: Fetch Form & Plan Info 
         form_ref = db.collection('Forms').document(form_id)
-        form_doc = form_ref.get()
+        form_doc = form_ref.get()#form document
         if not form_doc.exists: return jsonify({"error": f"Form '{form_id}' not found"}), 404
-        form_data = form_doc.to_dict()
+        form_data = form_doc.to_dict()#form dictionary
         plan_id = form_data.get('plan_id')
         if not plan_id: return jsonify({"error": "Form missing 'plan_id'"}), 500
 
         plan_ref = db.collection('Plans').document(plan_id)
-        plan_doc = plan_ref.get()
+        plan_doc = plan_ref.get()#plan snapshot document
         if not plan_doc.exists: return jsonify({"error": f"Plan '{plan_id}' not found"}), 404
-        plan_data = plan_doc.to_dict()
+        plan_data = plan_doc.to_dict()#plan data or dictionary
         levels_map = plan_data.get('levels', {})
 
-        # --- 3. Get Course Demand (Filtering by Prefix) ---
+        # Step 3: Get Course Demand (Filtering by Prefix) 
         form_responses_map = form_data.get('Form_Responses', {})
         course_demand = collections.Counter()
-        relevant_course_prefixes = ("CPIT", "CPIS", "CPCS")
+        relevant_course_prefixes = ("CPIT", "CPIS", "CPCS")#we only do recommendations for Faculty courses
 
         if isinstance(form_responses_map, dict):
-            for response_data in form_responses_map.values():
+            for response_data in form_responses_map.values():#for every resposne in the form
                 if isinstance(response_data, dict):
                     selected = response_data.get('selected_courses', [])
                     if isinstance(selected, list):
-                        cleaned = [c.strip() for c in selected if isinstance(c, str) and c.strip().startswith(relevant_course_prefixes)]
-                        course_demand.update(cleaned)
+                        cleaned = [c.strip() for c in selected if isinstance(c, str) and c.strip().startswith(relevant_course_prefixes)]#clean selected courses list
+                        course_demand.update(cleaned)#here we increment the counter of every course, 
 
-        relevant_course_ids = list(course_demand.keys())
+        relevant_course_ids = list(course_demand.keys())#a list of courses which students wants
         if not relevant_course_ids:
              return jsonify({"message": "No relevant course selections found in this form.", "schedule_assignments": {}}), 200
 
-        # --- 4. Fetch Course Details (Hours) & Calculate Sections Needed ---
-        courses_info = {}
+        # Step 4: Fetch Course Details (Hours) & Calculate Sections Needed 
+        courses_info = {}# a map of courses needed and the details
         course_refs_to_get = [db.collection('Courses').document(cid) for cid in relevant_course_ids]
-        course_docs = db.get_all(course_refs_to_get)
+        course_docs = db.get_all(course_refs_to_get)#get courses documents
 
         for course_doc in course_docs:
             if course_doc.exists:
@@ -2027,43 +2026,44 @@ def generate_section_schedule(decoded_token):
         if not courses_info:
              return jsonify({"message": "No valid courses requiring sections found.", "schedule_assignments": {}}), 200
 
-        # --- 5. Map Courses to Levels ---
-        course_levels = collections.defaultdict(list)
-        for level_key, courses in levels_map.items():
+        # Step 5: Map Courses to Levels 
+        course_levels = collections.defaultdict(list)#this will contain a map, where the keys are numbers or extra basically, and the values are a list of courses.
+        #so basically you can use it to ask : level 1 what courses are in it ? and you get a list of the courses in level 1 by using key 1
+        #will be useful for ai to know the couses in each level, to try and make less conflicts between them
+        for level_key, courses in levels_map.items():#level 1: [CPIT250,etc] for every level in the plan
              if isinstance(courses, list):
-                  level_num_str = level_key.split(' ')[1] if level_key.startswith('Level ') and len(level_key.split(' ')) > 1 and level_key.split(' ')[1].isdigit() else 'Extra'
-                  for course_id in courses:
-                       if course_id in courses_info:
-                            course_levels[level_num_str].append(course_id)
+                  level_num_str = level_key.split(' ')[1] if level_key.startswith('Level ') and len(level_key.split(' ')) > 1 and level_key.split(' ')[1].isdigit() else 'Extra'#the current level as string but number or Extra
+                  for course_id in courses:#for every course in the level
+                       if course_id in courses_info:#if the course is a key in the courses info , meaning its a course that students want
+                            course_levels[level_num_str].append(course_id)#
 
-        # --- 6. Generate Available Time Slots ---
+        # Step 6: Generate Available Time Slots 
         slots_50_min, slots_80_min = generate_time_slots()
 
-        # --- 7. Structure Data for Prompt (with REFINED constraints) ---
+        # Step 7 : Structure Data for Prompt 
         # Dynamically set time constraint text based on the two valid preferences
         if time_preference == "MorningAndAfternoonFocus":
             time_constraint_text = "Time preference: Strongly focus scheduling sections in the Morning (before 12 PM) and Afternoon (1 PM to 5 PM / 13:00-17:00)."
         elif time_preference == "AfternoonAndEveningFocus":
             time_constraint_text = "Time preference: Strongly focus scheduling sections in the Afternoon (1 PM to 5 PM / 13:00-17:00) and Early Evening (5 PM to 8 PM / 17:00-20:00)."
-        else: # Fallback
+        else: # Fallback just in case
              time_constraint_text = "Time preference: General distribution."
 
         # Construct the prompt_data dictionary with refined constraints
+        #prompt contains lots of infromation we gathered
         prompt_data = {
             "goal": "Generate a weekly class schedule assigning time slots to course sections.",
             "constraints": [
                 f"Default section capacity: {section_capacity} students.",
                 time_constraint_text,
                 "Prioritize minimizing time conflicts between sections of different courses listed in the same 'level_groupings' entry. Maximize non-conflicting options.",
-                # *** Refined Slot Reuse Constraint ***
                 "To satisfy the time preference efficiently, reuse popular time slots within the preferred time blocks across different sections (even for the same course) where possible.",
-                # *** Refined Evening Constraint ***
                 "3-credit courses require exactly three 50-min slots (Sun/Tue/Thu) OR exactly two 80-min slots (Mon/Wed).",
                 "2-credit courses require exactly two 50-min slots (Sun/Tue/Thu).",
                 "The same time slots are given across compatible days to a course section"
             ],
             "courses_to_schedule": [
-                {"course_id": cid, **info} for cid, info in courses_info.items()
+                {"course_id": cid, **info} for cid, info in courses_info.items()#here we put all the courses and their details including required sections, demand things we calculated
             ],
             "level_groupings": dict(course_levels),
             "available_50_min_slots": slots_50_min,
@@ -2081,49 +2081,46 @@ def generate_section_schedule(decoded_token):
         Ensure the output is a valid JSON object matching the 'desired_output_format'.
 
         Data and Constraints:
-        {json.dumps(prompt_data, indent=2)}
+        {json.dumps(prompt_data, indent=2)}#turn python dictionary into string that is json formatted, indent is to make it human readable
         """
 
-        # --- 8. Call External LLM API (Using Client structure) ---
-        print("--- PREPARING TO CALL LLM API (Client Method) ---")
+        # Step 8:  Call External LLM API (Using Client structure) 
+        
         generated_schedule = None
         try:
-            from google import genai # Attempting import as per user confirmation
-
+            import google.generativeai as genai
             api_key = os.getenv("GEMINI_API_KEY")
             if not api_key:
                 raise ValueError("GEMINI_API_KEY environment variable not set.")
 
             print("--- Initializing genai.Client ---")
-            client = genai.Client(api_key=api_key)
+            client = genai.Client(api_key=api_key)#create a clinet object, and we put the api key in the parameter
 
-            model_name = 'gemini-2.0-flash' # Using the model specified by the user
-            print(f"--- Using Model: {model_name} ---")
-            print(f"--- SENDING PROMPT TO LLM API (Client Method) ---")
-            print(prompt_string)#testing
+            model_name = 'gemini-2.0-flash' # we are using this model for its speed and capabilites
+            
 
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt_string
-            )
-            print("--- LLM RESPONSE RECEIVED (Client Method) ---")
+            )#here we are sending the prompt and request to the AI API
+            
 
-            # --- Process Response ---
-            schedule_json_string = response.text
+            # Process Response 
+            schedule_json_string = response.text#extract the string of the response, it should be json according to our prompt
             if schedule_json_string.startswith("```json"):
                  schedule_json_string = schedule_json_string[7:]
             if schedule_json_string.endswith("```"):
                  schedule_json_string = schedule_json_string[:-3]
-            schedule_json_string = schedule_json_string.strip()
+            schedule_json_string = schedule_json_string.strip()#we do some cleaning of the string and only take the main part, which is the actual json, so now its a string that looks like a json
 
-            generated_schedule = json.loads(schedule_json_string)
+            generated_schedule = json.loads(schedule_json_string)#convert the string into a corresponding python object e.g: list, dictionary whatever is fitting and it should be dictionary
 
-            # --- Basic Validation of LLM Response ---
+            # Basic Validation of LLM Response 
             if not isinstance(generated_schedule, dict):
+                 #if we enter here,this means we failed to parse the string that looks like json into python dictionary
                  print(f"LLM response was not a valid JSON object (dictionary). Response:\n{response.text}")
                  raise ValueError("LLM response was not structured as expected (not a dictionary).")
-            # TODO: Add more robust validation here
-            print("--- LLM RESPONSE PARSED SUCCESSFULLY ---")
+            
 
         except ImportError as imp_err:
              print(f"ImportError: {imp_err}")
@@ -2148,20 +2145,20 @@ def generate_section_schedule(decoded_token):
                  error_message = "Failed to get response from AI service."
             return jsonify({"error": error_message, "details": error_detail}), status_code
 
-        if generated_schedule is None:
+        if generated_schedule is None:# if its none, then try to figure out from the resopnse what happened, there are attibutes in the respnose that came from gemini api such as promptfeedback , 
              try:
                   feedback = getattr(response, 'prompt_feedback', None)
-                  if feedback and getattr(feedback, 'block_reason', None):
+                  if feedback and getattr(feedback, 'block_reason', None):#check if that feedback object got an attribute called block reason, it might help us figure out why the promt was blocked
                        block_reason = feedback.block_reason.name
                        print(f"LLM call blocked due to safety settings: {block_reason}")
                        return jsonify({"error": f"Request blocked by AI safety filters: {block_reason}"}), 400
              except Exception: pass
              return jsonify({"error": "Failed to get schedule from AI service (unknown reason)."}), 503
-        # --- End API Call Block ---
+        
         
 
-        print(generated_schedule)#testing
-        # --- 9. Return Generated Schedule ---
+        
+        # Step 9: Return Generated Schedule 
         return jsonify({
             "form_id": form_id,
             "schedule_preference": time_preference,
@@ -2505,18 +2502,18 @@ def get_my_forms(decoded_token):
 def get_form_courses(decoded_token):
     """
     Retrieves courses associated with a specific form, filtered for the calling student.
-    Requires user authentication. Expects form_id in the JSON request body.
-    VALIDATES that the student's record was updated AFTER the form's start date.
-    Returns lists of available, unavailable (prereqs not met), unavailable (finished),
-    recommended courses, the student's previously selected courses, the form's
-    max_graduate_hours limit, AND a map of available course IDs to their credit hours.
+    check 1 : ensure that student file was updated after the start date of form. for uptodate information
+    return: we will return many lists of courses such as available, unavailable (prereqs not met), 
+    unavailable (finished),recommended courses, 
+    student's previously selected courses, and the form's max_graduate_hours limit,
+    and a map of available course IDs to their credit hours.
     Recommendations prioritize 'important' courses (prerequisites for others)
-    from the earliest available level. Includes fallback logic.
+    from the earliest available level to follow the plan.
     """
-    form_id = None # Initialize for error logging
-    uid = None # Initialize for error logging
+    form_id = None # Initialize data
+    uid = None 
     try:
-        # --- Get form_id from JSON Body ---
+        # Step 1: Get form_id from request
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request body"}), 400
@@ -2524,9 +2521,9 @@ def get_form_courses(decoded_token):
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
             return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
         form_id = form_id.strip()
-        # --- End form_id retrieval ---
+        
 
-        # --- 1. Get Student UID and Data ---
+        # Step 2: extract Student UID and Data 
         uid = decoded_token.get('uid')
         if not uid:
              return jsonify({"error": "UID not found in token"}), 400
@@ -2541,7 +2538,7 @@ def get_form_courses(decoded_token):
         finished_courses_set = set(student_data.get('Finished_Courses', []))
         student_last_updated = student_data.get('last_updated') # Get student's last update time
 
-        # --- 2. Get Form Data ---
+        # Step 3: Get Form Data 
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
         if not form_doc.exists:
@@ -2552,6 +2549,7 @@ def get_form_courses(decoded_token):
         form_start_date = form_data.get('start_date') # Get form start date
         max_graduate_hours_from_form = form_data.get('max_graduate_hours')
 
+        #validate data
         if not plan_id:
              return jsonify({"error": f"Form '{form_id}' does not have an associated plan_id"}), 400
         # Ensure form_start_date is a datetime object (Timestamp from Firestore)
@@ -2563,18 +2561,19 @@ def get_form_courses(decoded_token):
              print(f"Warning: Form {form_id} has invalid/missing 'max_graduate_hours'.")
              return jsonify({"error": "Form configuration is incomplete or invalid (max_graduate_hours)."}), 500
 
-        # --- 2b. Validate Student Data Freshness ---
+        # Check 1 : Validate Student Data Freshness 
         if not isinstance(student_last_updated, datetime):
             return jsonify({"error": "Please update your academic record using the extension before accessing this form."}), 403
 
         form_start_date_utc = form_start_date.replace(tzinfo=timezone.utc) if form_start_date.tzinfo is None else form_start_date
         student_last_updated_utc = student_last_updated.replace(tzinfo=timezone.utc) if student_last_updated.tzinfo is None else student_last_updated
 
+        #student last update date for data , must be after form start date, for upto date information
         if student_last_updated_utc <= form_start_date_utc:
             return jsonify({"error": "Your academic record is outdated relative to this form. Please update it using the extension."}), 403
-        # --- End Freshness Check ---
+        # End Freshness Check 
 
-        # --- 3. Get Previous Response ---
+        # Step 4: Get Previous Response, to ensure student response is saved and not start halucinating
         previously_selected_courses = []
         form_responses_map = form_data.get('Form_Responses', {})
         if isinstance(form_responses_map, dict):
@@ -2584,35 +2583,40 @@ def get_form_courses(decoded_token):
                 if isinstance(courses, list):
                      previously_selected_courses = courses
 
-        # --- 4. Get Plan Structure ---
+        # Step 5: Get Plan Structure 
         plan_ref = db.collection('Plans').document(plan_id)
         plan_doc = plan_ref.get()
         if not plan_doc.exists:
              return jsonify({"error": f"Plan '{plan_id}' associated with form '{form_id}' not found"}), 404
 
         plan_data = plan_doc.to_dict()
-        levels_map = plan_data.get('levels', {})
+        levels_map = plan_data.get('levels', {})#level map will be useful.
         if not levels_map:
              return jsonify({"error": f"Plan '{plan_id}' has no levels defined"}), 400
 
-        # --- 5. Extract All Courses from Plan & Store Level Info ---
+        # Step 6: Extract All Courses from Plan & Store Level Info 
+        #we create here 3 things that are useful for us
+        #1- a list of all courses Id in the plan
+        #2- a map for fast mapping a course id to its level, so If I type CPIT250, I get immediately the level the course is in.
+        #3- level order is a map, that has the level keys as keys, and the value to them is just their order in numbers , so "level 1" key will have value 1, etc. but for extra we will have a number that actually represent its order.
         all_plan_courses_with_level = []
         level_order = {}
         level_counter = 1
         sorted_level_keys = sorted(levels_map.keys(), key=lambda k: int(k.split(' ')[1]) if k.startswith('Level ') and k.split(' ')[1].isdigit() else float('inf'))
 
         for level_key in sorted_level_keys:
-            courses = levels_map[level_key]
+            courses = levels_map[level_key]#a list of courses inside the level
             if not isinstance(courses, list): continue
             level_order[level_key] = level_counter
             level_counter += 1
-            for course_id in courses:
+
+            for course_id in courses:#this will create a map that I can use for fast info on the level of a certain course
                  if isinstance(course_id, str):
                       all_plan_courses_with_level.append((course_id, level_key))
 
         all_plan_course_ids = list(set(c[0] for c in all_plan_courses_with_level))
 
-        # --- 6. Fetch Details (Prereqs & Hours) for All Plan Courses ---
+        # Step 7: Fetch Details (Prereqs & Hours) for All Plan Courses 
         # Store details in a map for easy lookup later
         course_details_map = {} # {course_id: {"hours": H, "prerequisites": [...]}}
         if all_plan_course_ids:
@@ -2636,64 +2640,76 @@ def get_form_courses(decoded_token):
                        course_details_map[course_doc.id] = {"hours": 0, "prerequisites": []}
 
 
-        # --- 6b. Calculate Dependency Count ---
-        dependency_count = collections.defaultdict(int)
+        # Step 8: Calculate Dependency Count 
+        dependency_count = collections.defaultdict(int)#here we create a dictionary, the keys will be courses , the value is the dependency count, 
+        #this is special dictionary that would create a key if it doesn't exist , instead of giving error if it doesn't exist, removes the need to check before adding
         for course_id in all_plan_course_ids:
             for other_course_id in all_plan_course_ids:
+                 #for every course , we check every other course, if the other course has the current course in his preerquisute list, then increment the depencdy count of the current course
                  if other_course_id == course_id: continue
                  # Use the fetched details map
                  prereqs = course_details_map.get(other_course_id, {}).get("prerequisites", [])
                  if course_id in prereqs:
                       dependency_count[course_id] += 1
 
-        # --- 7. Filter Courses for the Student ---
+        # Step 9: Filter Courses for the Student 
         available_courses = []
         unavailable_prereqs = []
         unavailable_finished = []
 
         for course_id in all_plan_course_ids:
             if course_id in finished_courses_set:
+                 #student has finished current course
                  unavailable_finished.append(course_id)
                  continue
 
             # Use the fetched details map for prerequisites
-            prereqs_for_course = set(course_details_map.get(course_id, {}).get("prerequisites", []))
-            if prereqs_for_course.issubset(finished_courses_set):
+            prereqs_for_course = set(course_details_map.get(course_id, {}).get("prerequisites", []))#fetch course pre
+            if prereqs_for_course.issubset(finished_courses_set):#here we check if the student has finished every prerequiust for the current course
+                 #if we enter here , then yes its available
                  available_courses.append(course_id)
             else:
-                 missing_prereqs = list(prereqs_for_course - finished_courses_set)
+                 #if we enter here , he didn't finish one of the pre
+                 missing_prereqs = list(prereqs_for_course - finished_courses_set)#here we just make a list of the pre that he didn't finish
                  unavailable_prereqs.append({"course_id": course_id, "missing": missing_prereqs})
 
 
-        # --- 8. Recommendation Logic with Fallback ---
-        # (Logic remains the same as previous version)
+        # Step 10: Recommendation Logic 
         recommended_courses = []
-        min_level_num = float('inf')
+        min_level_num = float('inf')#here we just set the lowest level to the highest for iniatlization 
         available_courses_set = set(available_courses)
-
+        
+        #go through every available course, look at its level and find the lowest level as number
         if available_courses:
-            for course_id, level_key in all_plan_courses_with_level:
+            for course_id, level_key in all_plan_courses_with_level:#for every course and its level
                  if course_id in available_courses_set:
-                      level_num = level_order.get(level_key, float('inf'))
-                      min_level_num = min(min_level_num, level_num)
+                      level_num = level_order.get(level_key, float('inf'))#here we just get the level of the course that is available as a number
+                      min_level_num = min(min_level_num, level_num)#
 
+        #if the lowest leven isn't infinity, go through every course, if the course is available, and its level is the lowest level we find,
+        #and if the course has other courses depending on it, add it to the list of recommended courses
         if min_level_num != float('inf'):
              for course_id, level_key in all_plan_courses_with_level:
                   if (course_id in available_courses_set and
                           level_order.get(level_key) == min_level_num and
                           dependency_count.get(course_id, 0) > 0):
-                       recommended_courses.append(course_id)
+                       recommended_courses.append(course_id) #
 
-        recommended_courses = list(set(recommended_courses))
+        recommended_courses = list(set(recommended_courses))#here just make sure there are no repeating values
 
         if not recommended_courses and available_courses:
             print(f"INFO: No important courses found in earliest level ({min_level_num}). Falling back to highest dependency available courses.")
-            available_with_deps = [(c_id, dependency_count.get(c_id, 0)) for c_id in available_courses]
+            #if we enter here, this means recommended courses is missing and there are available courses
+            #if no courses in the lowest level has dependency count, then recommended courses depend on dependency count
+            available_with_deps = [(c_id, dependency_count.get(c_id, 0)) for c_id in available_courses]#create a list of tuples with course id , dependency count
+            #the sorting is like this : for every item (tuple) in the list, the resulting number that will be used for sorting him will be the second value in the tuple, meaning its dependency count, also the sorting is reversed meaning its descending, so 
+            #tupels will be sorted from highest to lowest, 
             available_with_deps.sort(key=lambda item: item[1], reverse=True)
+            #here for each tuple in the list, just get the first courseid, then the recommended courses list will be updated to be a list of those courses .
             recommended_courses = [item[0] for item in available_with_deps]
 
 
-        # --- 8b. Create Map of Available Course Hours (NEW STEP) ---
+        # Step 11: Create Map of Available Course Hours 
         available_course_hours = {}
         for course_id in available_courses:
              # Look up hours in the details map fetched earlier
@@ -2702,16 +2718,16 @@ def get_form_courses(decoded_token):
                   available_course_hours[course_id] = details.get("hours", 0) # Default to 0 if hours missing in details
              else:
                   available_course_hours[course_id] = 0 # Default if course details somehow weren't fetched
-        # --- End Course Hours Map ---
+        # End Course Hours Map 
 
 
-        # --- 9. Return Response ---
+        # Step 12: Return Response 
         return jsonify({
             "form_id": form_id,
             "plan_id": plan_id,
             "max_graduate_hours": max_graduate_hours_from_form,
             "available_courses": available_courses,
-            "available_course_hours": available_course_hours, # *** Added new map ***
+            "available_course_hours": available_course_hours, 
             "recommended_courses": recommended_courses,
             "unavailable_due_to_prerequisites": unavailable_prereqs,
             "unavailable_due_to_completion": unavailable_finished,
@@ -2889,7 +2905,7 @@ def add_form_response(decoded_token):
         }), 200
 
     except Exception as e:
-        # Log error with more context if available
+        # Log error 
         uid_local = uid if 'uid' in locals() and uid else 'unknown'
         form_id_local = form_id if 'form_id' in locals() and form_id else 'unknown'
         print(f"Error in /addFormResponse for form {form_id_local}, user {uid_local}: {e}")
