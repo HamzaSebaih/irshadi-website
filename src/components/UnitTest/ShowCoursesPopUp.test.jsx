@@ -11,8 +11,15 @@ jest.mock('../../contexts/AuthContext', () => ({
 global.fetch = jest.fn();
 
 describe('ShowCoursesPopUp', () => {
+
+  const load = () => // method to load the virtual screen
+    render(
+      <ShowCoursesPopUp />
+    );
+
+  // clean previous mocks before each test
   beforeEach(() => {
-    jest.clearAllMocks(); // clean previous mocks before each test
+    jest.clearAllMocks(); 
     
     // fake user with a test token
     useAuth.mockReturnValue({
@@ -22,7 +29,7 @@ describe('ShowCoursesPopUp', () => {
     });
   });
 
-  it('fetches and shows courses when the component loads', async () => {
+  test('fetch and show courses when the component loads', async () => {
     // course info to be fetch
     const sampleCourses = [
       { department: 'CPIT', course_number: 250, course_name: 'Software Engineering', hours: 3 },
@@ -34,10 +41,10 @@ describe('ShowCoursesPopUp', () => {
       json: async () => ({ courses: sampleCourses }),
     });
 
-    render(<ShowCoursesPopUp />); 
+    load(); // rander the popUp screen virtually within the test
 
     await waitFor(() => {
-      // make sure the request was sent with the token
+      // make sure the request was sent with the token and specified back-end URL
       expect(fetch).toHaveBeenCalledWith(
         'http://127.0.0.1:5000/getCourses',
         expect.objectContaining({
@@ -49,13 +56,13 @@ describe('ShowCoursesPopUp', () => {
     });
   });
 
-  it('adds a course using the form input', async () => {
-    render(<ShowCoursesPopUp />);
-
+  test('add a course using the form input', async () => {
+    load(); // rander the popUp screen virtually within the test
+    // wait for the rander method to be completed and then make sure a text displayed says "Create New Course"
     await waitFor(() => screen.getByText('Create New Course'));
-
+    // simulate clicking on the "Create New Course" button 
     fireEvent.click(screen.getByText('Create New Course'));
-
+    // in the next lines we simulate filling the input form required to add a new course
     fireEvent.change(screen.getByLabelText(/Department/), {
       target: { value: 'CPIT' },
     });
@@ -66,9 +73,9 @@ describe('ShowCoursesPopUp', () => {
       target: { value: '3' },
     });
     fireEvent.change(screen.getByLabelText(/Course Name/), {
-      target: { value: 'Test Course' },
+      target: { value: 'Software Engineering' },
     });
-
+    // simulate clicking on the button to save the course
     fireEvent.click(screen.getByText('Save Course'));
 
     await waitFor(() => {
@@ -80,7 +87,7 @@ describe('ShowCoursesPopUp', () => {
           body: JSON.stringify({
             department: 'CPIT',
             course_number: 250,
-            course_name: 'Test Course',
+            course_name: 'Software Engineering',
             hours: 3,
           }),
         })
@@ -88,11 +95,11 @@ describe('ShowCoursesPopUp', () => {
     });
   });
 
-  it('still works even if API fails', async () => {
+  test('handles API errors without crashing', async () => {
     // make fetch fail
     fetch.mockRejectedValueOnce(new Error('API Error'));
 
-    render(<ShowCoursesPopUp />);
+    load(); // rander the popUp screen virtually within the test
 
     await waitFor(() => {
       // check if the pop up still rander 
