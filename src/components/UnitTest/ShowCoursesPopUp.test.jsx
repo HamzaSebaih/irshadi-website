@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ShowCoursesPopUp from '../ShowCoursesPopUp';
 import { useAuth } from '../../contexts/AuthContext';
 
-// mocking auth context
+// fake auth context
 jest.mock('../../contexts/AuthContext', () => ({
   useAuth: jest.fn(),
 }));
@@ -14,7 +14,7 @@ describe('ShowCoursesPopUp', () => {
   beforeEach(() => {
     jest.clearAllMocks(); // clean previous mocks before each test
     
-    // fake user with a token function
+    // fake user with a test token
     useAuth.mockReturnValue({
       user: {
         getIdToken: jest.fn().mockResolvedValue('test-token'),
@@ -23,9 +23,9 @@ describe('ShowCoursesPopUp', () => {
   });
 
   it('fetches and shows courses when the component loads', async () => {
-    // this is the course it should fetch
+    // course info to be fetch
     const sampleCourses = [
-      { department: 'CPIT', course_number: 250, course_name: 'Test Course', hours: 3 },
+      { department: 'CPIT', course_number: 250, course_name: 'Software Engineering', hours: 3 },
     ];
 
     // simulate fetch returning course list
@@ -34,7 +34,7 @@ describe('ShowCoursesPopUp', () => {
       json: async () => ({ courses: sampleCourses }),
     });
 
-    render(<ShowCoursesPopUp />); // show the component
+    render(<ShowCoursesPopUp />); 
 
     await waitFor(() => {
       // make sure the request was sent with the token
@@ -50,42 +50,25 @@ describe('ShowCoursesPopUp', () => {
   });
 
   it('adds a course using the form input', async () => {
-    // mocking both getCourses and addCourse API
-    fetch.mockImplementation((url) => {
-      if (url.includes('getCourses')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ courses: [] }), // no courses first
-        });
-      }
-      if (url.includes('addCourse')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-      }
-      return Promise.reject('Unknown endpoint');
-    });
-
     render(<ShowCoursesPopUp />);
 
-    // wait for the form to load
     await waitFor(() => screen.getByText('Create New Course'));
 
-    // simulate user typing values
     fireEvent.click(screen.getByText('Create New Course'));
 
-    fireEvent.change(screen.getByPlaceholderText('Ex. CPIT'), {
+    fireEvent.change(screen.getByLabelText(/Department/), {
       target: { value: 'CPIT' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Ex. 250'), {
+    fireEvent.change(screen.getByLabelText(/Course Number/), {
       target: { value: '250' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Ex. 3'), {
+    fireEvent.change(screen.getByLabelText(/Hours/), {
       target: { value: '3' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Ex. Software Engineering 1'), {
+    fireEvent.change(screen.getByLabelText(/Course Name/), {
       target: { value: 'Test Course' },
     });
 
-    // click save to add the course
     fireEvent.click(screen.getByText('Save Course'));
 
     await waitFor(() => {
@@ -112,7 +95,7 @@ describe('ShowCoursesPopUp', () => {
     render(<ShowCoursesPopUp />);
 
     await waitFor(() => {
-      // check if fallback UI still shows
+      // check if the pop up still rander 
       expect(screen.getByText('Available Courses')).toBeInTheDocument();
     });
 
