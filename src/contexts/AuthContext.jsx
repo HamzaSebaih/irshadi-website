@@ -1,10 +1,14 @@
-import { createContext, useContext, useState, useEffect, useMemo } from 'react'; 
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { auth } from '../firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 
 const AuthContext = createContext();
@@ -12,28 +16,40 @@ const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); 
-  const [loading, setLoading] = useState(true); 
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => { 
-      setUser(user); 
-      setLoading(false); 
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false);
     });
     return unsubscribe;
   }, []);
 
 
-  const signup = (email, password) => { 
-    return createUserWithEmailAndPassword(auth, email, password); 
+  const signup = (email, password) => {
+    return createUserWithEmailAndPassword(auth, email, password);
   };
 
-  const login = (email, password) => { 
-    return signInWithEmailAndPassword(auth, email, password); 
+  const login = (email, password) => {
+    return signInWithEmailAndPassword(auth, email, password);
   };
 
-  const logout = () => { 
-    return signOut(auth); 
+  const googleLogin = () => {
+    return signInWithPopup(auth, GoogleAuthProvider);
+  };
+
+  const logout = () => {
+    return signOut(auth);
+  };
+
+  const sendVerificationEmail = (user) => {
+    return sendEmailVerification(user);
+  };
+
+  const resetPassword = (email) => {
+    return sendPasswordResetEmail(auth,email);
   };
 
 
@@ -41,7 +57,10 @@ export function AuthProvider({ children }) {
     user,
     signup,
     login,
-    logout
+    googleLogin,
+    logout,
+    sendVerificationEmail,
+    resetPassword
   }), [user]);
 
 
