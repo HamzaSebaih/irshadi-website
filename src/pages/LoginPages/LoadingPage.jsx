@@ -25,7 +25,7 @@ const LoadingPage = () => {
         }, 1500); // 1.5 seconds delay
       }
     }
-    // else: Still loading, wait for next effect run
+    
   }, [user, loadingExtra, extraInfo, navigate]);
 
   // Render the loading spinner UI
