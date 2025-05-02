@@ -191,12 +191,8 @@ const AdminHomePage = () => {
           form_id: formThatWantToBeEdited.form_id,
           title: formThatWantToBeEdited.title,
           description: formThatWantToBeEdited.description,
-          start_date: typeof formThatWantToBeEdited.start_date === 'string' //here I'm checking the currect type of date that the backend need is met or not
-            ? formThatWantToBeEdited.start_date
-            : formatDate(formThatWantToBeEdited.start_date),
-          end_date: typeof formThatWantToBeEdited.end_date === 'string' //here I'm checking the currect type of date that the backend need is met or not
-            ? formThatWantToBeEdited.end_date
-            : formatDate(formThatWantToBeEdited.end_date),
+          start_date: formatDate(formThatWantToBeEdited.start_date),
+          end_date: formatDate(formThatWantToBeEdited.end_date),
         };
         const response = await fetch(`${backendIp}/editForm`, {
           method: "PATCH",
@@ -455,7 +451,8 @@ const AdminHomePage = () => {
                       >
                         Delete
                       </button>
-                      <button
+                      
+                       <button
                         title="Edit Form"
                         className="flex-1 border-r border-gray-200 px-4 py-3 text-sm font-medium text-accent-dark hover:bg-accent/10 focus:z-10 focus:outline-none focus:ring-2 focus:ring-accent"
                         onClick={() => { 
