@@ -10,17 +10,21 @@ jest.mock('../../contexts/AuthContext', () => ({
 // creating fake fetch for testing
 global.fetch = jest.fn();
 
-describe('ShowCoursesPopUp', () => {
-
+describe('ShowCoursesPopUp test', () => {
   const load = () => // method to load the virtual screen
     render(
       <ShowCoursesPopUp />
     );
+    // mock console errors and alerts 
+    beforeAll(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      window.alert = jest.fn();
+    });
 
   // clean previous mocks before each test
   beforeEach(() => {
     jest.clearAllMocks(); 
-    
+
     // fake user with a test token
     useAuth.mockReturnValue({
       user: {

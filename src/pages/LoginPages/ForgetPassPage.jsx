@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import { getAuth, sendPasswordResetEmail, fetchSignInMethodsForEmail} from "firebase/auth";
+import { useAuth } from "../../contexts/AuthContext";
 import { motion } from "framer-motion";
 import Lottie from "lottie-react";
 import myAnimation from "../../assets/Animation.json";
@@ -12,8 +12,7 @@ const ForgetPassPage = () => {
   const [error, setError] = useState({});
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
-  const auth = getAuth();
-
+  const {resetPassword} = useAuth();
   // method to handle reseting password when user click on the button
   const handleResetPassword = async (e) => {
     e.preventDefault();
@@ -30,7 +29,7 @@ const ForgetPassPage = () => {
     if (Object.keys(validation).length) return;
   
     try {
-      await sendPasswordResetEmail(auth, usercred.email);
+      await resetPassword(usercred.email);
       setMessage("Password reset link has been sent to your email!");
       setTimeout(() => navigate("/"), 3000);
     } catch (err) {
