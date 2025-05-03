@@ -127,15 +127,6 @@ const LoginPage = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="flex items-center text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="mr-2 h-4 w-4 rounded border-gray-300 "
-                />
-                Keep me signed in
-              </label>
               <Link to="/ForgetPassPage" className="text-sm text-blue-500 hover:underline">Forgot password?</Link>
             </div>
 

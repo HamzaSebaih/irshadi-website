@@ -76,7 +76,7 @@ const SignupPage = () => {
     try {
       const res = await signup(userInfo.email, userInfo.password);
       await storeName(res.user,userInfo.firstName+" "+userInfo.lastName);
-      console.log("Signup success, sending email verification...");
+      alert("Signup success, sending email verification...");
       await sendVerificationEmail(res.user);
       await logout();
 

@@ -6,6 +6,7 @@ const StudentHomePage = () => {
      const { user } = useAuth(); //this is used to get the token from the current user to send it to the backend
     const { extraInfo } = useExtraInfo();
     const navigate = useNavigate(); 
+    console.log(user.getIdToken())
     return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
             <div className="bg-white shadow-lg rounded-2xl p-10 w-full max-w-7xl h-[90vh] flex flex-col justify-between">
