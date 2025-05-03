@@ -2503,15 +2503,15 @@ def get_form_courses(decoded_token):
     """
     Retrieves courses associated with a specific form, filtered for the calling student.
     check 1 : ensure that student file was updated after the start date of form. for uptodate information
-    return: we will return many lists of courses such as available, unavailable (prereqs not met), 
-    unavailable (finished),recommended courses, 
-    student's previously selected courses, and the form's max_graduate_hours limit,
+    return: we will return many lists of courses such as available, unavailable (prereqs not met),
+    unavailable (finished),recommended courses,
+    student's previously selected courses, the student's applicable hour limit for this form,
     and a map of available course IDs to their credit hours.
     Recommendations prioritize 'important' courses (prerequisites for others)
     from the earliest available level to follow the plan.
     """
     form_id = None # Initialize data
-    uid = None 
+    uid = None
     try:
         # Step 1: Get form_id from request
         data = request.get_json()
@@ -2521,9 +2521,9 @@ def get_form_courses(decoded_token):
         if not form_id or not isinstance(form_id, str) or not form_id.strip():
             return jsonify({"error": "Missing or invalid 'form_id' in request body"}), 400
         form_id = form_id.strip()
-        
 
-        # Step 2: extract Student UID and Data 
+
+        # Step 2: extract Student UID and Data
         uid = decoded_token.get('uid')
         if not uid:
              return jsonify({"error": "UID not found in token"}), 400
@@ -2537,8 +2537,13 @@ def get_form_courses(decoded_token):
         # Use a set for efficient prerequisite checking
         finished_courses_set = set(student_data.get('Finished_Courses', []))
         student_last_updated = student_data.get('last_updated') # Get student's last update time
+        # Get student hours for limit calculation
+        student_completed_hours = student_data.get('hours', {}).get('completed', 0)
+        student_exchanged_hours = student_data.get('hours', {}).get('exchanged', 0)
+        student_achieved_hours = student_completed_hours + student_exchanged_hours
 
-        # Step 3: Get Form Data 
+
+        # Step 3: Get Form Data
         form_ref = db.collection('Forms').document(form_id)
         form_doc = form_ref.get()
         if not form_doc.exists:
@@ -2547,6 +2552,8 @@ def get_form_courses(decoded_token):
         form_data = form_doc.to_dict()
         plan_id = form_data.get('plan_id')
         form_start_date = form_data.get('start_date') # Get form start date
+        # Get both hour limits from the form
+        max_hours_from_form = form_data.get('max_hours')
         max_graduate_hours_from_form = form_data.get('max_graduate_hours')
 
         #validate data
@@ -2556,12 +2563,15 @@ def get_form_courses(decoded_token):
         if not isinstance(form_start_date, datetime):
             print(f"Warning: Form {form_id} has invalid/missing 'start_date'. Type: {type(form_start_date)}")
             return jsonify({"error": "Form configuration is incomplete or invalid (start_date)."}), 500
-        # Ensure max_graduate_hours was found and is an int (added in /addForm)
+        # Ensure hour limits were found and are ints (added in /addForm)
+        if not isinstance(max_hours_from_form, int):
+             print(f"Warning: Form {form_id} has invalid/missing 'max_hours'.")
+             return jsonify({"error": "Form configuration is incomplete or invalid (max_hours)."}), 500
         if not isinstance(max_graduate_hours_from_form, int):
              print(f"Warning: Form {form_id} has invalid/missing 'max_graduate_hours'.")
              return jsonify({"error": "Form configuration is incomplete or invalid (max_graduate_hours)."}), 500
 
-        # Check 1 : Validate Student Data Freshness 
+        # Check 1 : Validate Student Data Freshness
         if not isinstance(student_last_updated, datetime):
             return jsonify({"error": "Please update your academic record using the extension before accessing this form."}), 403
 
@@ -2571,7 +2581,7 @@ def get_form_courses(decoded_token):
         #student last update date for data , must be after form start date, for upto date information
         if student_last_updated_utc <= form_start_date_utc:
             return jsonify({"error": "Your academic record is outdated relative to this form. Please update it using the extension."}), 403
-        # End Freshness Check 
+        # End Freshness Check
 
         # Step 4: Get Previous Response, to ensure student response is saved and not start halucinating
         previously_selected_courses = []
@@ -2583,7 +2593,7 @@ def get_form_courses(decoded_token):
                 if isinstance(courses, list):
                      previously_selected_courses = courses
 
-        # Step 5: Get Plan Structure 
+        # Step 5: Get Plan Structure & Required Hours and applicable limit
         plan_ref = db.collection('Plans').document(plan_id)
         plan_doc = plan_ref.get()
         if not plan_doc.exists:
@@ -2591,10 +2601,23 @@ def get_form_courses(decoded_token):
 
         plan_data = plan_doc.to_dict()
         levels_map = plan_data.get('levels', {})#level map will be useful.
+        required_hours_for_plan = plan_data.get('required_hours') # Get required hours for plan
+
         if not levels_map:
              return jsonify({"error": f"Plan '{plan_id}' has no levels defined"}), 400
+        if not isinstance(required_hours_for_plan, int) or required_hours_for_plan <= 0:
+             return jsonify({"error": f"Plan '{plan_id}' has invalid 'required_hours'"}), 500
 
-        # Step 6: Extract All Courses from Plan & Store Level Info 
+
+        # Determine Applicable Hour Limit 
+        remaining_hours = required_hours_for_plan - student_achieved_hours
+        # Check if student is considered graduating 
+        is_graduating = (remaining_hours <= max_graduate_hours_from_form)
+        applicable_hour_limit = max_graduate_hours_from_form if is_graduating else max_hours_from_form
+        # End Limit Calculation 
+
+
+        # Step 6: Extract All Courses from Plan & Store Level Info
         #we create here 3 things that are useful for us
         #1- a list of all courses Id in the plan
         #2- a map for fast mapping a course id to its level, so If I type CPIT250, I get immediately the level the course is in.
@@ -2616,7 +2639,7 @@ def get_form_courses(decoded_token):
 
         all_plan_course_ids = list(set(c[0] for c in all_plan_courses_with_level))
 
-        # Step 7: Fetch Details (Prereqs & Hours) for All Plan Courses 
+        # Step 7: Fetch Details (Prereqs & Hours) for All Plan Courses
         # Store details in a map for easy lookup later
         course_details_map = {} # {course_id: {"hours": H, "prerequisites": [...]}}
         if all_plan_course_ids:
@@ -2640,8 +2663,8 @@ def get_form_courses(decoded_token):
                        course_details_map[course_doc.id] = {"hours": 0, "prerequisites": []}
 
 
-        # Step 8: Calculate Dependency Count 
-        dependency_count = collections.defaultdict(int)#here we create a dictionary, the keys will be courses , the value is the dependency count, 
+        # Step 8: Calculate Dependency Count
+        dependency_count = collections.defaultdict(int)#here we create a dictionary, the keys will be courses , the value is the dependency count,
         #this is special dictionary that would create a key if it doesn't exist , instead of giving error if it doesn't exist, removes the need to check before adding
         for course_id in all_plan_course_ids:
             for other_course_id in all_plan_course_ids:
@@ -2652,7 +2675,7 @@ def get_form_courses(decoded_token):
                  if course_id in prereqs:
                       dependency_count[course_id] += 1
 
-        # Step 9: Filter Courses for the Student 
+        # Step 9: Filter Courses for the Student
         available_courses = []
         unavailable_prereqs = []
         unavailable_finished = []
@@ -2674,11 +2697,11 @@ def get_form_courses(decoded_token):
                  unavailable_prereqs.append({"course_id": course_id, "missing": missing_prereqs})
 
 
-        # Step 10: Recommendation Logic 
+        # Step 10: Recommendation Logic
         recommended_courses = []
-        min_level_num = float('inf')#here we just set the lowest level to the highest for iniatlization 
+        min_level_num = float('inf')#here we just set the lowest level to the highest for iniatlization
         available_courses_set = set(available_courses)
-        
+
         #go through every available course, look at its level and find the lowest level as number
         if available_courses:
             for course_id, level_key in all_plan_courses_with_level:#for every course and its level
@@ -2702,14 +2725,14 @@ def get_form_courses(decoded_token):
             #if we enter here, this means recommended courses is missing and there are available courses
             #if no courses in the lowest level has dependency count, then recommended courses depend on dependency count
             available_with_deps = [(c_id, dependency_count.get(c_id, 0)) for c_id in available_courses]#create a list of tuples with course id , dependency count
-            #the sorting is like this : for every item (tuple) in the list, the resulting number that will be used for sorting him will be the second value in the tuple, meaning its dependency count, also the sorting is reversed meaning its descending, so 
-            #tupels will be sorted from highest to lowest, 
+            #the sorting is like this : for every item (tuple) in the list, the resulting number that will be used for sorting him will be the second value in the tuple, meaning its dependency count, also the sorting is reversed meaning its descending, so
+            #tupels will be sorted from highest to lowest,
             available_with_deps.sort(key=lambda item: item[1], reverse=True)
             #here for each tuple in the list, just get the first courseid, then the recommended courses list will be updated to be a list of those courses .
             recommended_courses = [item[0] for item in available_with_deps]
 
 
-        # Step 11: Create Map of Available Course Hours 
+        # Step 11: Create Map of Available Course Hours
         available_course_hours = {}
         for course_id in available_courses:
              # Look up hours in the details map fetched earlier
@@ -2718,16 +2741,16 @@ def get_form_courses(decoded_token):
                   available_course_hours[course_id] = details.get("hours", 0) # Default to 0 if hours missing in details
              else:
                   available_course_hours[course_id] = 0 # Default if course details somehow weren't fetched
-        # End Course Hours Map 
+        # End Course Hours Map
 
 
-        # Step 12: Return Response 
+        # Step 12: Return Response
         return jsonify({
             "form_id": form_id,
             "plan_id": plan_id,
-            "max_graduate_hours": max_graduate_hours_from_form,
+            "max_graduate_hours": applicable_hour_limit,
             "available_courses": available_courses,
-            "available_course_hours": available_course_hours, 
+            "available_course_hours": available_course_hours,
             "recommended_courses": recommended_courses,
             "unavailable_due_to_prerequisites": unavailable_prereqs,
             "unavailable_due_to_completion": unavailable_finished,
