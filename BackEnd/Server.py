@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import collections # For defaultdict
 import traceback # For detailed error logging
-import google.generativeai as genai
+import google.genai as genai
 #End of Importing Section ___________
 
 load_dotenv() # Load environment variables
@@ -2088,7 +2088,6 @@ def generate_section_schedule(decoded_token):
         
         generated_schedule = None
         try:
-            import google.generativeai as genai
             api_key = os.getenv("GEMINI_API_KEY")
             if not api_key:
                 raise ValueError("GEMINI_API_KEY environment variable not set.")
