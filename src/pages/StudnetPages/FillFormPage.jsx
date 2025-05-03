@@ -258,8 +258,8 @@ const FillFormPage = () => {
                         title="Unavailable Courses"
                         courses={filteredCourses.unavailable}
                         isUnavailable={true}
-                        selectedCourses={selectedCourses} // Pass for consistency, though checkboxes are disabled
-                        handleCheckboxChange={handleCheckboxChange} // Pass for consistency
+                        selectedCourses={selectedCourses} 
+                        handleCheckboxChange={handleCheckboxChange} 
                     />
                 </div>
 
