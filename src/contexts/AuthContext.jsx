@@ -8,7 +8,8 @@ import {
   signOut,
   onAuthStateChanged,
   sendEmailVerification,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  updateProfile
 } from 'firebase/auth';
 
 const AuthContext = createContext();
@@ -37,7 +38,7 @@ export function AuthProvider({ children }) {
   };
 
   const googleLogin = () => {
-    return signInWithPopup(auth, GoogleAuthProvider);
+    return signInWithPopup(auth, new GoogleAuthProvider());
   };
 
   const logout = () => {
@@ -49,8 +50,15 @@ export function AuthProvider({ children }) {
   };
 
   const resetPassword = (email) => {
-    return sendPasswordResetEmail(auth,email);
+    return sendPasswordResetEmail(auth, email);
   };
+
+  const storeName = (user,name) => {
+    return updateProfile(user, {displayName: name});
+  };
+
+
+
 
 
   const value = useMemo(() => ({
@@ -60,7 +68,8 @@ export function AuthProvider({ children }) {
     googleLogin,
     logout,
     sendVerificationEmail,
-    resetPassword
+    resetPassword,
+    storeName
   }), [user]);
 
 
