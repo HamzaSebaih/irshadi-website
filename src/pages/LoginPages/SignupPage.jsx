@@ -20,14 +20,14 @@ const SignupPage = () => {
   const [error, setError] = useState({});
   const [termsChecked, setTermsChecked] = useState(false);
 
-  const { signup, logout, sendVerificationEmail, googleLogin} = useAuth();
+  const { signup, storeName, logout, sendVerificationEmail, googleLogin} = useAuth();
   const navigate = useNavigate();
 
-
+  // method to check email formatif was satisfied
   const validateEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
-  // method to check if password requirement were satisfied
+  // method to check if password requirements were satisfied
   const checkPassword = (pwd) => ({
     uppercase: /[A-Z]/.test(pwd),
     number: /[0-9]/.test(pwd),
@@ -39,13 +39,13 @@ const SignupPage = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // allow us to handle form validation and submission and prevent browser's auto submission
     setMessage({ type: "", msg: "" });
     const validation = {};
-
+    // from  46-70, do verification to input fiels and checkbox if they were met reqiurements  
     if (!userInfo.firstName.trim()) validation.firstName = "First name is required.";
     if (!userInfo.lastName.trim()) validation.lastName = "Last name is required.";
-
+  
     if (!userInfo.email) {
       validation.email = "Email is required.";
     } else if (!validateEmail(userInfo.email)) {
@@ -75,6 +75,7 @@ const SignupPage = () => {
 
     try {
       const res = await signup(userInfo.email, userInfo.password);
+      await storeName(res.user,userInfo.firstName+" "+userInfo.lastName);
       console.log("Signup success, sending email verification...");
       await sendVerificationEmail(res.user);
       await logout();

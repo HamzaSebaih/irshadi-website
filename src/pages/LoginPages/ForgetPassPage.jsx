@@ -19,7 +19,7 @@ const ForgetPassPage = () => {
     setMessage("");
     const validation = {};
   
-    // --- client-side validation
+    // validate email
     if (!usercred.email) {
       validation.email = "Please enter your email";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usercred.email)) {
