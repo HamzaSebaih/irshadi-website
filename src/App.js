@@ -31,7 +31,7 @@ const App = () => {
           <Nav />
           <Routes>
             <Route path="/*" element={
-              <UserRoute> {/*here we are wrapping this so that if a user is logged in he can't be in login page also we might change * WIP */}
+              <UserRoute> {/*here we are wrapping this so that if a user is logged in he can't be in login page */}
                 <LoginPage />
               </UserRoute>
             } />

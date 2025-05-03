@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate, Link } from "react-router";
-import { getAuth, signInWithPopup, GoogleAuthProvider, sendEmailVerification } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
@@ -21,11 +20,9 @@ const SignupPage = () => {
   const [error, setError] = useState({});
   const [termsChecked, setTermsChecked] = useState(false);
 
-  const { signup, logout } = useAuth();
+  const { signup, logout, sendVerificationEmail, googleLogin} = useAuth();
   const navigate = useNavigate();
 
-  const auth = getAuth();
-  const googleAuth = new GoogleAuthProvider();
 
   const validateEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -79,7 +76,7 @@ const SignupPage = () => {
     try {
       const res = await signup(userInfo.email, userInfo.password);
       console.log("Signup success, sending email verification...");
-      await sendEmailVerification(res.user);
+      await sendVerificationEmail(res.user);
       await logout();
 
       setMessage({ type: "success", msg: "Check your inbox to verify your email!" });
@@ -92,9 +89,9 @@ const SignupPage = () => {
     }
   };
 
-  const googleLogin = async () => {
+  const loginWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleAuth);
+      await googleLogin();
       navigate("/loading");
     } catch (err) {
       setError("Couldn't sign in with Google.");
@@ -192,7 +189,7 @@ const SignupPage = () => {
                 className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none pr-10"
               />
               <button type="button" onClick={() => setShowPassword(prev => !prev)} className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition">
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
               </button>
               {error.password
                 ? <p className="text-red-500 text-xs mt-1">{error.password}</p>
@@ -258,7 +255,7 @@ const SignupPage = () => {
               <hr className="flex-grow border-gray-300" />
             </div>
 
-            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={googleLogin} type="button" className="w-full flex items-center justify-center gap-3 border border-gray-300 py-2 rounded-md hover:bg-gray-100 transition">
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={loginWithGoogle} type="button" className="w-full flex items-center justify-center gap-3 border border-gray-300 py-2 rounded-md hover:bg-gray-100 transition">
               <img src="/search.png" alt="Google" className="w-5 h-5" />
               Continue with Google
             </motion.button>
