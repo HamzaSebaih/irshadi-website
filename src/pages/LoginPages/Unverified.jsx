@@ -36,8 +36,8 @@ export default function Unverified() {
         <div className="flex flex-col items-center justify-center h-screen bg-white text-center px-4">
             <button
                 onClick={handleReturn}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-8 self-start md:self-center" // Adjust alignment as needed
-                disabled={loading} // Disable when loading
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-8 self-start md:self-center" 
+                disabled={loading} 
             >
                 <ArrowLeft size={24} />
                 <span className="text-lg font-medium">Go back</span>
@@ -47,13 +47,12 @@ export default function Unverified() {
             </h1>
             <button
                 onClick={handleSendVerification}
-                disabled={loading || !user} // Disable button if loading or no user object
+                disabled={loading || !user} 
                 className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed mb-4 transition duration-150 ease-in-out"
             >
                 {loading ? 'Sending...' : 'Send Verification Email'}
             </button>
 
-            {/* Display Success or Error Messages */}
             {message && <p className="text-green-600 mt-4">{message}</p>}
             {error && <p className="text-red-600 mt-4">{error}</p>}
         </div>

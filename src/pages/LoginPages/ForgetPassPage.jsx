@@ -12,13 +12,13 @@ const ForgetPassPage = () => {
   const [error, setError] = useState({});
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
-  const {resetPassword} = useAuth();
+  const { resetPassword } = useAuth();
   // method to handle reseting password when user click on the button
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setMessage("");
     const validation = {};
-  
+
     // validate email
     if (!usercred.email) {
       validation.email = "Please enter your email";
@@ -27,7 +27,7 @@ const ForgetPassPage = () => {
     }
     setError(validation);
     if (Object.keys(validation).length) return;
-  
+
     try {
       await resetPassword(usercred.email);
       setMessage("Password reset link has been sent to your email!");
