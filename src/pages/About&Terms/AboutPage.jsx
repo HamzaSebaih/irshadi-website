@@ -1,12 +1,12 @@
 import { motion } from "framer-motion";
 
-export default function AboutPage() {
+const AboutPage = () => {
   return (
     <div className="min-h-screen bg-white p-8 text-gray-800">
       <motion.div
         initial={{ opacity: 0, y: -50 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1 }}
+        transition={{ duration: 0.8 }}
         className="max-w-4xl mx-auto text-center"
       >
         <h1 className="text-5xl font-extrabold mb-6 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 text-transparent bg-clip-text">
@@ -21,9 +21,8 @@ export default function AboutPage() {
         className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.5, duration: 1 }}
+        transition={{ duration: 0.8 }}
       >
-        {/* Who We Are */}
         <motion.div
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -35,7 +34,6 @@ export default function AboutPage() {
           </p>
         </motion.div>
 
-        {/* Our Story */}
         <motion.div
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -47,7 +45,6 @@ export default function AboutPage() {
           </p>
         </motion.div>
 
-        {/* What We Do */}
         <motion.div
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -64,7 +61,7 @@ export default function AboutPage() {
         <motion.div
           initial={{ x: -100, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 1.5, duration: 0.8 }}
+          transition={{ duration: 0.8 }}
         >
           <h2 className="text-2xl font-bold text-blue-500 mb-2">Our Platform</h2>
           <ul className="list-disc list-inside text-gray-700">
@@ -79,9 +76,9 @@ export default function AboutPage() {
         </motion.div>
 
         <motion.div
-          initial={{ x: 100, opacity: 0 }}
+          initial={{ x: -100, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 2, duration: 0.8 }}
+          transition={{ duration: 0.8 }}
         >
           <h2 className="text-2xl font-bold text-blue-500 mb-2">Our Values</h2>
           <ul className="list-disc list-inside text-gray-700">
@@ -92,9 +89,9 @@ export default function AboutPage() {
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 2.5, duration: 1 }}
+          initial={{ x: -100, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ duration: 0.8 }}
         >
           <h2 className="text-2xl font-bold text-blue-500 mb-2">Contact Us</h2>
           <p className="text-gray-700">
@@ -109,3 +106,4 @@ export default function AboutPage() {
     </div>
   );
 }
+export default AboutPage;
