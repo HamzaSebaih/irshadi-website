@@ -4,13 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router';
 
 function LogoutButton() {
-    const navigate = useNavigate(); // Initialize useNavigate
-    const { logout } = useAuth(); // Destructure the logout function from the context
+    const navigate = useNavigate();
+    const { logout } = useAuth(); 
     const handleLogout = async () => {
         try {
             await logout();
             console.log('User signed out');
-            navigate('/pages/LoginPages/LoginPage'); // Replace '/login' with your login route
+            navigate('/'); 
         } catch (error) {
             console.error('Logout error:', error);
         }
