@@ -230,7 +230,6 @@ const ShowCoursesPopUp = ({ parentCourse, planID, planLevel, setIsAddedNewCourse
         body: JSON.stringify({ plan_name: planID, level_identifier: fixedPlanLevel, course_id: course_ide }),
       });
       const data = await response.json();
-      console.log(data)
       if (data.frontEndMessage == 101) {
         setIsAddedNewCourse({ level: planLevel, course: course_ide, alreadyAdded: true })
       }

@@ -84,7 +84,7 @@ const AdminStudyPlansPage = () => {
         setDeleteConfirmPopUp(false);
       }
     } catch (error) {
-      console.error("Error adding plan:", error); // Note: Original file had "Error adding plan" here, keeping it.
+      console.error("Error adding plan:", error); 
       alert(`Failed to delete plan: ${error.message}`);
     }
   };
@@ -100,7 +100,6 @@ const AdminStudyPlansPage = () => {
   const handleAddPlan = async (e) => { //this will send the plan details to the backend
     e.preventDefault();
     try {
-      // console.log("planName: "+planName+ " currentLevel "+currentLevel+" required_hours "+ planRequierdHours) // Original comment kept
       const token = await user.getIdToken();
       const requiredHoursNum = Number(planRequierdHours);
        if (isNaN(requiredHoursNum) || requiredHoursNum <= 0) {
