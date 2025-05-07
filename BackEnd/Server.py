@@ -163,9 +163,11 @@ def login(*args, **kwargs):
                 "gpa": 0,
                 "exchanged": 0
             },
-            "finishedCourses": [] 
+            "Finished_Courses": [] 
         }
         student_ref.set(new_student_data)
+
+        new_student_data['role'] = "student"
 
         # Return the new student data 
         return jsonify(new_student_data), 200
@@ -2092,7 +2094,7 @@ def generate_section_schedule(decoded_token):
             if not api_key:
                 raise ValueError("GEMINI_API_KEY environment variable not set.")
 
-            print("--- Initializing genai.Client ---")
+            
             client = genai.Client(api_key=api_key)#create a clinet object, and we put the api key in the parameter
 
             model_name = 'gemini-2.0-flash' # we are using this model for its speed and capabilites
