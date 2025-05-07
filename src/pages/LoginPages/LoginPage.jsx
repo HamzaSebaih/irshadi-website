@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate, Link } from "react-router";
-import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Lottie from "lottie-react";
 import myAnimation from "../../assets/Animation.json";
-
 const LoginPage = () => {
   const [usercred, setUserCred] = useState({
     email: "",
@@ -16,14 +14,13 @@ const LoginPage = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState({});
   const [message, setMessage] = useState("");
-  const { login } = useAuth();
+  const { login, googleLogin} = useAuth();
   const navigate = useNavigate();
-  const auth = getAuth();
-  const googleAuth = new GoogleAuthProvider();
+
 
   // method to handle when user submit his credentals
   const submitForm = async (event) => {
-    event.preventDefault();
+    event.preventDefault(); // allow us to handle form validation and submission and prevent browser's auto submission 
     setError("");
     setMessage("");
     const validation = {};
@@ -44,9 +41,9 @@ const LoginPage = () => {
     }
   };
   // handle Google login when user click the button
-  const googleLogin = async () => {
+  const loginWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleAuth);
+       await googleLogin();
       navigate("/loading");
     } catch (err) {
       setError("Couldn't sign in with Google.");
@@ -119,7 +116,7 @@ const LoginPage = () => {
                 type="button"
                 onClick={() => setShowPass(!showPass)}
                 className="absolute right-3 top-[38px] text-gray-500 hover:text-blue-500 transition"
-                
+
               >
                 {showPass ? <Eye size={20} /> : <EyeOff size={20} />}
               </button>
@@ -130,15 +127,6 @@ const LoginPage = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="flex items-center text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="mr-2 h-4 w-4 rounded border-gray-300 "
-                />
-                Keep me signed in
-              </label>
               <Link to="/ForgetPassPage" className="text-sm text-blue-500 hover:underline">Forgot password?</Link>
             </div>
 
@@ -166,7 +154,7 @@ const LoginPage = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               type="button"
-              onClick={googleLogin}
+              onClick={loginWithGoogle}
               className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-gray-300 bg-white rounded-md text-gray-700 shadow hover:bg-gray-100 "
             >
               <img src="/search.png" alt="Google" className="h-5 w-5" />

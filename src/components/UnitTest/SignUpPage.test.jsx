@@ -17,7 +17,7 @@ const mockSignup = jest.fn();
 const mockLogout = jest.fn();
 const mockSendVerificationEmail = jest.fn();
 const mockGoogleLogin = jest.fn();
-
+const mockStoreName = jest.fn(); 
 // assign the mocked function to the firebase
 jest.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -25,6 +25,7 @@ jest.mock('../../contexts/AuthContext', () => ({
     logout: mockLogout,
     sendVerificationEmail: mockSendVerificationEmail,
     googleLogin: mockGoogleLogin,
+    storeName: mockStoreName, 
   }),
 }));
 

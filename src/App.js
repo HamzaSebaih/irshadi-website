@@ -1,7 +1,6 @@
 import './App.css';
 import LoginPage from './pages/LoginPages/LoginPage';
 import ForgetPassPage from './pages/LoginPages/ForgetPassPage';
-import ProfileCompletionPage from './pages/LoginPages/ProfileCompletionPage'
 import StudentHomePage from './pages/StudnetPages/StudentHomePage';
 import Nav from "./components/Nav";
 import { AuthProvider } from './contexts/AuthContext';
@@ -41,7 +40,6 @@ const App = () => {
             <Route path="/Loading" element={<LoadingPage />} />
             <Route path="/About" element={<AboutPage />} />
             <Route path="/Terms" element={<TermsPage />} />
-            <Route path="/ProfileCompletionPage" element={<ProfileCompletionPage />} />
             <Route path="/Unverified" element={<Unverified />} />
 
 
