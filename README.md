@@ -27,7 +27,7 @@ flowchart LR
     Frontend -- "Request Information" <--> Backend
     Frontend -- "Extract Student Info" --> Extension
     Extension -- "Send HTML" --> Backend
-    Backend -- "Firestore" --> FirebaseDB
+    Backend -- "Firestore" <--> FirebaseDB
 
     %% Subgraphs for clarity
     subgraph "Client-Side"
